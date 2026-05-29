@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>Swipe Camera</title>
+
+<style>
+    *{
+        margin:0;
+        padding:0;
+        box-sizing:border-box;
+        -webkit-user-select:none;
+        user-select:none;
+        touch-action:none;
+    }
+
+    body{
+        overflow:hidden;
+        background:black;
+        font-family:sans-serif;
+    }
+
+    #camera{
+        position:fixed;
+        inset:0;
+        width:100%;
+        height:100%;
+        object-fit:cover;
+        transform-origin:center center;
+        background:black;
+    }
+
+    .controls{
+        position:fixed;
+        bottom:30px;
+        left:50%;
+        transform:translateX(-50%);
+        display:flex;
+        align-items:center;
+        gap:40px;
+
+        background:rgba(0,0,0,0.45);
+        padding:18px 30px;
+        border-radius:999px;
+        backdrop-filter:blur(10px);
+
+        transition:0.35s ease;
+    }
+
+    .btn{
+        width:78px;
+        height:78px;
+        border-radius:50%;
+        border:none;
+        cursor:pointer;
+        transition:0.25s ease;
+        position:relative;
+    }
+
+    .btn:active{
+        transform:scale(0.9);
+    }
+
+    #photoBtn{
+        background:white;
+        border:6px solid #ddd;
+    }
+
+    #videoBtn{
+        background:#ff2a2a;
+        border:6px solid #ff7d7d;
+    }
+
+    .recording{
+        animation:pulse 1s infinite;
+    }
+
+    @keyframes pulse{
+        0%{
+            transform:scale(1);
+        }
+        50%{
+            transform:scale(0.86);
+        }
+        100%{
+            transform:scale(1);
+        }
+    }
+
+    .flash{
+        position:fixed;
+        inset:0;
+        background:white;
+        opacity:0;
+        pointer-events:none;
+    }
+
+    .flash.show{
+        animation:flashAnim 0.2s;
+    }
+
+    @keyframes flashAnim{
+        0%{opacity:0.9;}
+        100%{opacity:0;}
+    }
+
+    .zoomText{
+        position:fixed;
+        top:30px;
+        left:50%;
+        transform:translateX(-50%);
+        color:white;
+        font-size:28px;
+        font-weight:bold;
+        background:rgba(0,0,0,0.45);
+        padding:10px 18px;
+        border-radius:999px;
+        backdrop-filter:blur(10px);
+    }
+</style>
+</head>
+<body>
+
+<video id="camera" autoplay playsinline muted></video>
+
+<div class="zoomText" id="zoomText">1x</div>
+
+<div class="controls" id="controls">
+    <button class="btn" id="photoBtn"></button>
+    <button class="btn" id="videoBtn"></button>
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+const video = document.getElementById("camera");
+const photoBtn = document.getElementById("photoBtn");
+const videoBtn = document.getElementById("videoBtn");
+const controls = document.getElementById("controls");
+const flash = document.getElementById("flash");
+const zoomText = document.getElementById("zoomText");
+
+let mediaStream;
+let mediaRecorder;
+let recordedChunks = [];
+let recording = false;
+
+let swapped = false;
+
+let zoom = 1;
+
+async function initCamera(){
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+        video:{
+            facingMode:"environment"
+        },
+        audio:true
+    });
+
+    video.srcObject = mediaStream;
+}
+
+initCamera();
+
+function triggerFlash(){
+    flash.classList.remove("show");
+    void flash.offsetWidth;
+    flash.classList.add("show");
+}
+
+function downloadBlob(blob, filename){
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+}
+
+photoBtn.addEventListener("click", () => {
+    const canvas = document.createElement("canvas");
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob(blob => {
+        downloadBlob(blob, `photo_${Date.now()}.png`);
+    });
+
+    triggerFlash();
+});
+
+videoBtn.addEventListener("click", () => {
+
+    if(!recording){
+
+        recordedChunks = [];
+
+        mediaRecorder = new MediaRecorder(mediaStream);
+
+        mediaRecorder.ondataavailable = e => {
+            if(e.data.size > 0){
+                recordedChunks.push(e.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks,{
+                type:"video/webm"
+            });
+
+            downloadBlob(blob, `video_${Date.now()}.webm`);
+        };
+
+        mediaRecorder.start();
+
+        recording = true;
+        videoBtn.classList.add("recording");
+
+    }else{
+
+        mediaRecorder.stop();
+
+        recording = false;
+        videoBtn.classList.remove("recording");
+    }
+});
+
+function swapButtons(){
+
+    swapped = !swapped;
+
+    if(swapped){
+        controls.innerHTML = `
+            <button class="btn" id="videoBtn"></button>
+            <button class="btn" id="photoBtn"></button>
+        `;
+    }else{
+        controls.innerHTML = `
+            <button class="btn" id="photoBtn"></button>
+            <button class="btn" id="videoBtn"></button>
+        `;
+    }
+
+    reconnectButtons();
+}
+
+function reconnectButtons(){
+
+    const newPhoto = document.getElementById("photoBtn");
+    const newVideo = document.getElementById("videoBtn");
+
+    newPhoto.addEventListener("click", () => {
+        const canvas = document.createElement("canvas");
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const ctx = canvas.getContext("2d");
+
+        ctx.drawImage(video, 0, 0);
+
+        canvas.toBlob(blob => {
+            downloadBlob(blob, `photo_${Date.now()}.png`);
+        });
+
+        triggerFlash();
+    });
+
+    newVideo.addEventListener("click", () => {
+
+        if(!recording){
+
+            recordedChunks = [];
+
+            mediaRecorder = new MediaRecorder(mediaStream);
+
+            mediaRecorder.ondataavailable = e => {
+                if(e.data.size > 0){
+                    recordedChunks.push(e.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks,{
+                    type:"video/webm"
+                });
+
+                downloadBlob(blob, `video_${Date.now()}.webm`);
+            };
+
+            mediaRecorder.start();
+
+            recording = true;
+            newVideo.classList.add("recording");
+
+        }else{
+
+            mediaRecorder.stop();
+
+            recording = false;
+            newVideo.classList.remove("recording");
+        }
+    });
+
+    if(recording){
+        newVideo.classList.add("recording");
+    }
+}
+
+let startX = 0;
+let startY = 0;
+
+document.addEventListener("touchstart", e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+});
+
+document.addEventListener("touchend", e => {
+
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+
+    const dx = endX - startX;
+    const dy = endY - startY;
+
+    // 左右スワイプ
+    if(Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy)){
+
+        swapButtons();
+    }
+
+    // 上スワイプ → ズーム
+    else if(dy < -70){
+
+        zoom++;
+
+        applyZoom();
+    }
+
+    // 下スワイプ → ルーズ
+    else if(dy > 70){
+
+        zoom--;
+
+        if(zoom < 1){
+            zoom = 1;
+        }
+
+        applyZoom();
+    }
+});
+
+function applyZoom(){
+
+    video.style.transform = `scale(${zoom})`;
+
+    zoomText.textContent = `${zoom}x`;
+}
+</script>
+
+</body>
+</html>
