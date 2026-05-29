@@ -443,21 +443,6 @@
 
   return '';
 }
-      if (!window.MediaRecorder) return '';
-      const candidates = [
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
-        'video/webm;codecs=vp9',
-        'video/webm;codecs=vp8',
-        'video/webm'
-      ];
-      for (const type of candidates){
-        try{
-          if (MediaRecorder.isTypeSupported(type)) return type;
-        }catch(e){}
-      }
-      return '';
-    }
 
     function downloadBlob(blob, filename){
       const url = URL.createObjectURL(blob);
@@ -485,16 +470,19 @@
   navigator.canShare &&
   navigator.share &&
   files.every(f => navigator.canShare({ files:[f] }))
-)
-          await navigator.share({
+){
+  await navigator.share({
             files,
             title: 'Camera Memory',
             text: '保存した写真と動画'
           });
           clearMemory();
           showMessage('メモリから保存したよ', 1600);
+
           return;
         }
+      }
+
       }catch(err){
         console.log('share failed', err);
       }
