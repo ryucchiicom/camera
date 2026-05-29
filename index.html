@@ -6,11 +6,12 @@
   <title>Camera App</title>
   <style>
     :root{
-      --bar-h: 128px;
+      --bar-h: 170px;
       --btn: 84px;
-      --side: 20px;
-      --swap-dur: 360ms;
-      --zoom-dur: 180ms;
+      --mini-btn: 38px;
+      --side: 18px;
+      --swap-dur: 320ms;
+      --ui: rgba(255,255,255,.10);
     }
 
     *{
@@ -31,12 +32,11 @@
     }
 
     #app{
-      position: relative;
       width: 100%;
       height: 100%;
-      background: #000;
       display: flex;
       flex-direction: column;
+      background: #000;
     }
 
     #viewport{
@@ -46,13 +46,12 @@
       overflow: hidden;
     }
 
-    #camera{
+    #preview{
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      display: block;
       background: #000;
-      transform-origin: center center;
-      transition: transform var(--zoom-dur) ease;
+      touch-action: none;
     }
 
     #gestureLayer{
@@ -76,12 +75,13 @@
     .pill{
       padding: 8px 12px;
       border-radius: 999px;
-      background: rgba(0,0,0,.45);
+      background: rgba(0,0,0,.42);
       color: #fff;
       font-size: 13px;
+      letter-spacing: .03em;
+      border: 1px solid rgba(255,255,255,.10);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,.12);
     }
 
     #zoomPill{
@@ -98,119 +98,6 @@
     #zoomPill.show{
       opacity: 1;
       transform: translateY(0);
-    }
-
-    #controls{
-      position: relative;
-      height: var(--bar-h);
-      background: #000;
-      overflow: hidden;
-      border-top: 1px solid rgba(255,255,255,.06);
-    }
-
-    #swapZone{
-      position: absolute;
-      left: 50%;
-      top: 0;
-      transform: translateX(-50%);
-      width: 120px;
-      height: 100%;
-      z-index: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: rgba(255,255,255,.35);
-      font-size: 18px;
-      letter-spacing: 2px;
-      pointer-events: auto;
-      touch-action: none;
-    }
-
-    #swapZone::before{
-      content: "";
-      position: absolute;
-      width: 68px;
-      height: 44px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.04);
-      border: 1px solid rgba(255,255,255,.08);
-    }
-
-    .controlBtn{
-      position: absolute;
-      bottom: 22px;
-      width: var(--btn);
-      height: var(--btn);
-      border-radius: 50%;
-      border: none;
-      outline: none;
-      z-index: 3;
-      transition:
-        left var(--swap-dur) cubic-bezier(.2,.9,.2,1),
-        transform 120ms ease,
-        box-shadow 120ms ease,
-        opacity 120ms ease;
-      box-shadow: 0 8px 22px rgba(0,0,0,.4);
-      touch-action: manipulation;
-    }
-
-    .controlBtn:active{
-      transform: scale(.94);
-    }
-
-    #videoBtn{
-      left: var(--side);
-      background: #ff2f2f;
-      box-shadow: 0 0 0 4px rgba(255,47,47,.12), 0 8px 22px rgba(0,0,0,.4);
-    }
-
-    #photoBtn{
-      left: calc(100% - var(--side) - var(--btn));
-      background: #fff;
-      box-shadow: 0 0 0 4px rgba(255,255,255,.12), 0 8px 22px rgba(0,0,0,.4);
-    }
-
-    #videoBtn.recording{
-      animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse{
-      0%   { box-shadow: 0 0 0 0 rgba(255,47,47,.45), 0 8px 22px rgba(0,0,0,.4); }
-      70%  { box-shadow: 0 0 0 16px rgba(255,47,47,0), 0 8px 22px rgba(0,0,0,.4); }
-      100% { box-shadow: 0 0 0 0 rgba(255,47,47,0), 0 8px 22px rgba(0,0,0,.4); }
-    }
-
-    .innerDot{
-      position: absolute;
-      inset: 0;
-      margin: auto;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: transparent;
-      transition: all 180ms ease;
-    }
-
-    #videoBtn .innerDot{
-      width: 28px;
-      height: 28px;
-      background: #fff;
-      border-radius: 10px;
-    }
-
-    #videoBtn.recording .innerDot{
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
-      background: #fff;
-    }
-
-    #photoBtn .innerDot{
-      width: 24px;
-      height: 24px;
-      border: 4px solid #111;
-      background: transparent;
-      border-radius: 50%;
     }
 
     #message{
@@ -237,6 +124,170 @@
       opacity: 1;
     }
 
+    #controls{
+      position: relative;
+      height: var(--bar-h);
+      background: #000;
+      border-top: 1px solid rgba(255,255,255,.06);
+      overflow: hidden;
+    }
+
+    #albumBar{
+      height: 58px;
+      padding: 8px 10px 0;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+
+    #albumBar::-webkit-scrollbar{
+      display: none;
+    }
+
+    .thumb{
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: #111;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+
+    .albumHint{
+      flex: 0 0 auto;
+      color: rgba(255,255,255,.45);
+      font-size: 12px;
+      padding: 0 4px 0 2px;
+      white-space: nowrap;
+    }
+
+    #mainRow{
+      position: relative;
+      height: calc(var(--bar-h) - 58px);
+    }
+
+    .controlBtn{
+      position: absolute;
+      bottom: 18px;
+      width: var(--btn);
+      height: var(--btn);
+      border-radius: 50%;
+      border: none;
+      outline: none;
+      z-index: 3;
+      transition:
+        left var(--swap-dur) cubic-bezier(.2,.9,.2,1),
+        right var(--swap-dur) cubic-bezier(.2,.9,.2,1),
+        transform 120ms ease,
+        box-shadow 120ms ease;
+      box-shadow: 0 8px 22px rgba(0,0,0,.42);
+      touch-action: manipulation;
+    }
+
+    .controlBtn:active{
+      transform: scale(.94);
+    }
+
+    #videoBtn{
+      left: var(--side);
+      background: #ff2f2f;
+      box-shadow: 0 0 0 4px rgba(255,47,47,.12), 0 8px 22px rgba(0,0,0,.42);
+    }
+
+    #photoBtn{
+      right: var(--side);
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(255,255,255,.12), 0 8px 22px rgba(0,0,0,.42);
+    }
+
+    #videoBtn.recording{
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse{
+      0%   { box-shadow: 0 0 0 0 rgba(255,47,47,.44), 0 8px 22px rgba(0,0,0,.42); }
+      70%  { box-shadow: 0 0 0 16px rgba(255,47,47,0), 0 8px 22px rgba(0,0,0,.42); }
+      100% { box-shadow: 0 0 0 0 rgba(255,47,47,0), 0 8px 22px rgba(0,0,0,.42); }
+    }
+
+    .innerDot{
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      transition: all 180ms ease;
+    }
+
+    #videoBtn .innerDot{
+      width: 28px;
+      height: 28px;
+      background: #fff;
+      border-radius: 10px;
+    }
+
+    #videoBtn.recording .innerDot{
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    #photoBtn .innerDot{
+      width: 24px;
+      height: 24px;
+      border: 4px solid #111;
+      background: transparent;
+      border-radius: 50%;
+    }
+
+    #centerTools{
+      position: absolute;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      z-index: 4;
+    }
+
+    .miniBtn{
+      width: var(--mini-btn);
+      height: var(--mini-btn);
+      border: none;
+      border-radius: 50%;
+      background: rgba(255,255,255,.08);
+      color: #fff;
+      font-size: 18px;
+      line-height: 1;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 6px 14px rgba(0,0,0,.30);
+      touch-action: manipulation;
+      padding: 0;
+    }
+
+    .miniBtn:active{
+      transform: scale(.94);
+    }
+
+    #swapBtn{
+      font-size: 17px;
+    }
+
+    #flipBtn{
+      font-size: 16px;
+    }
+
     #hiddenCanvas{
       display: none;
     }
@@ -245,7 +296,7 @@
 <body>
   <div id="app">
     <div id="viewport">
-      <video id="camera" autoplay playsinline muted></video>
+      <canvas id="preview"></canvas>
       <div id="gestureLayer"></div>
 
       <div id="topHud">
@@ -257,53 +308,67 @@
     </div>
 
     <div id="controls">
-      <div id="swapZone" aria-label="左右のボタンを入れ替え">↔</div>
+      <div id="albumBar">
+        <div class="albumHint">写真</div>
+      </div>
 
-      <button id="videoBtn" class="controlBtn" aria-label="動画の開始と停止">
-        <span class="innerDot"></span>
-      </button>
+      <div id="mainRow">
+        <button id="videoBtn" class="controlBtn" aria-label="動画の開始と停止">
+          <span class="innerDot"></span>
+        </button>
 
-      <button id="photoBtn" class="controlBtn" aria-label="写真を撮る">
-        <span class="innerDot"></span>
-      </button>
+        <div id="centerTools">
+          <button id="swapBtn" class="miniBtn" aria-label="左右のボタンを入れ替え">↔</button>
+          <button id="flipBtn" class="miniBtn" aria-label="前後カメラを切り替え">⟲</button>
+        </div>
+
+        <button id="photoBtn" class="controlBtn" aria-label="写真を撮る">
+          <span class="innerDot"></span>
+        </button>
+      </div>
     </div>
 
     <canvas id="hiddenCanvas"></canvas>
   </div>
 
   <script>
-    const video = document.getElementById('camera');
-    const viewport = document.getElementById('viewport');
+    const preview = document.getElementById('preview');
     const gestureLayer = document.getElementById('gestureLayer');
-    const controls = document.getElementById('controls');
-    const swapZone = document.getElementById('swapZone');
     const videoBtn = document.getElementById('videoBtn');
     const photoBtn = document.getElementById('photoBtn');
+    const swapBtn = document.getElementById('swapBtn');
+    const flipBtn = document.getElementById('flipBtn');
     const zoomPill = document.getElementById('zoomPill');
     const recPill = document.getElementById('recPill');
     const messageBox = document.getElementById('message');
+    const albumBar = document.getElementById('albumBar');
     const hiddenCanvas = document.getElementById('hiddenCanvas');
 
+    const pctx = preview.getContext('2d');
+    const photoCtx = hiddenCanvas.getContext('2d');
+
     let stream = null;
+    let videoEl = document.createElement('video');
+    videoEl.autoplay = true;
+    videoEl.playsInline = true;
+    videoEl.muted = true;
+
     let mediaRecorder = null;
     let recordedChunks = [];
     let isRecording = false;
 
+    let currentFacing = 'environment';
     let swapped = false;
 
-    let currentZoom = 1;
-    const minZoom = 1;
-    const maxZoom = 8;
-    const zoomStep = 1;
+    const zoomLevels = [0.5, 1, 2, 3, 4, 5, 6, 7, 8];
+    let zoomIndex = 1;
+    let currentZoom = zoomLevels[zoomIndex];
 
-    let activeTrack = null;
-    let supportsTrackZoom = false;
+    const MAX_PHOTOS = 24;
+    let photos = [];
 
-    let swipeStartX = 0;
-    let swipeStartY = 0;
-    let swipeStartTime = 0;
-    let gestureMode = null; // "zoom" or "swap" or null
-    let gestureLocked = false;
+    let renderRunning = true;
+    let recordStream = null;
 
     function showMessage(text, ms = 2200){
       messageBox.textContent = text;
@@ -319,46 +384,112 @@
       showZoom._t = setTimeout(() => zoomPill.classList.remove('show'), 900);
     }
 
-    function updateZoomVisual(){
-      video.style.transform = `scale(${currentZoom})`;
+    function updateZoom(){
       showZoom();
-    }
-
-    async function applyHardwareZoom(value){
-      if (!activeTrack || !supportsTrackZoom) return false;
-      try{
-        await activeTrack.applyConstraints({
-          advanced: [{ zoom: value }]
-        });
-        return true;
-      }catch(err){
-        return false;
-      }
-    }
-
-    async function setZoom(nextZoom){
-      const clamped = Math.max(minZoom, Math.min(maxZoom, nextZoom));
-      if (clamped === currentZoom) return;
-
-      currentZoom = clamped;
-      updateZoomVisual();
-
-      const ok = await applyHardwareZoom(currentZoom);
-      if (!ok && activeTrack){
-        // 端末が光学ズーム非対応でも、見た目はちゃんと変わるようにしておく
-      }
     }
 
     function toggleSwap(){
       swapped = !swapped;
 
       if (swapped){
-        videoBtn.style.left = `calc(100% - var(--side) - var(--btn))`;
-        photoBtn.style.left = `var(--side)`;
+        videoBtn.style.left = 'auto';
+        videoBtn.style.right = 'var(--side)';
+        photoBtn.style.right = 'auto';
+        photoBtn.style.left = 'var(--side)';
       }else{
-        videoBtn.style.left = `var(--side)`;
-        photoBtn.style.left = `calc(100% - var(--side) - var(--btn))`;
+        videoBtn.style.right = 'auto';
+        videoBtn.style.left = 'var(--side)';
+        photoBtn.style.left = 'auto';
+        photoBtn.style.right = 'var(--side)';
       }
+    }
+
+    function stopStream(){
+      if (stream){
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+      }
+    }
+
+    async function startCamera(){
+      if (isRecording){
+        stopRecording();
+      }
+
+      stopStream();
+
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: currentFacing },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        });
+
+        videoEl.srcObject = stream;
+        await videoEl.play();
+
+        showMessage(currentFacing === 'environment' ? '外カメラ' : '内カメラ', 1000);
+      }catch(err){
+        console.error(err);
+        showMessage('カメラを使えなかった。権限を確認してね');
+      }
+    }
+
+    function resizeCanvas(){
+      const rect = preview.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      preview.width = Math.floor(rect.width * dpr);
+      preview.height = Math.floor(rect.height * dpr);
+    }
+
+    function drawFrame(){
+      if (!renderRunning) return;
+
+      if (preview.width === 0 || preview.height === 0){
+        resizeCanvas();
+      }
+
+      const cw = preview.width;
+      const ch = preview.height;
+      pctx.fillStyle = '#000';
+      pctx.fillRect(0, 0, cw, ch);
+
+      if (videoEl.readyState >= 2 && videoEl.videoWidth && videoEl.videoHeight){
+        const vw = videoEl.videoWidth;
+        const vh = videoEl.videoHeight;
+
+        if (currentZoom >= 1){
+          let cropW = vw / currentZoom;
+          let cropH = vh / currentZoom;
+
+          const targetAspect = cw / ch;
+          const cropAspect = cropW / cropH;
+
+          if (cropAspect > targetAspect){
+            cropW = cropH * targetAspect;
+          }else{
+            cropH = cropW / targetAspect;
+          }
+
+          const sx = (vw - cropW) / 2;
+          const sy = (vh - cropH) / 2;
+          pctx.drawImage(videoEl, sx, sy, cropW, cropH, 0, 0, cw, ch);
+        }else{
+          const drawW = cw * currentZoom;
+          const drawH = ch * currentZoom;
+          const dx = (cw - drawW) / 2;
+          const dy = (ch - drawH) / 2;
+          pctx.drawImage(videoEl, 0, 0, vw, vh, dx, dy, drawW, drawH);
+        }
+      }else{
+        pctx.fillStyle = '#111';
+        pctx.fillRect(0, 0, cw, ch);
+      }
+
+      requestAnimationFrame(drawFrame);
     }
 
     function getBestMimeType(){
@@ -378,17 +509,6 @@
       return '';
     }
 
-    function downloadBlob(blob, filename){
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    }
-
     function formatDate(){
       const d = new Date();
       const pad = n => String(n).padStart(2, '0');
@@ -402,57 +522,108 @@
       );
     }
 
-    function drawZoomedFrameToCanvas(canvas, sourceVideo, zoom){
-      const ctx = canvas.getContext('2d', { willReadFrequently: false });
-      const vw = sourceVideo.videoWidth;
-      const vh = sourceVideo.videoHeight;
+    function renderAlbum(){
+      albumBar.querySelectorAll('.thumb').forEach(el => el.remove());
 
-      if (!vw || !vh) return false;
-
-      canvas.width = vw;
-      canvas.height = vh;
-
-      if (zoom <= 1){
-        ctx.drawImage(sourceVideo, 0, 0, vw, vh);
-        return true;
-      }
-
-      const cropW = vw / zoom;
-      const cropH = vh / zoom;
-      const sx = Math.max(0, (vw - cropW) / 2);
-      const sy = Math.max(0, (vh - cropH) / 2);
-
-      ctx.drawImage(sourceVideo, sx, sy, cropW, cropH, 0, 0, vw, vh);
-      return true;
+      photos.slice().reverse().forEach(src => {
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.src = src;
+        img.alt = '撮った写真';
+        img.addEventListener('click', () => {
+          const w = window.open('');
+          if (w) {
+            w.document.write(`
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>写真</title>
+              <style>
+                html,body{margin:0;height:100%;background:#000;display:grid;place-items:center}
+                img{max-width:100vw;max-height:100vh;object-fit:contain}
+              </style>
+              <img src="${src}">
+            `);
+          }
+        });
+        albumBar.appendChild(img);
+      });
     }
 
-    async function capturePhoto(){
-      if (!video.videoWidth || !video.videoHeight){
+    function loadAlbum(){
+      try{
+        const saved = localStorage.getItem('camera_album_v1');
+        if (saved){
+          const arr = JSON.parse(saved);
+          if (Array.isArray(arr)){
+            photos = arr.filter(x => typeof x === 'string');
+          }
+        }
+      }catch(e){}
+      renderAlbum();
+    }
+
+    function saveAlbum(){
+      try{
+        localStorage.setItem('camera_album_v1', JSON.stringify(photos.slice(-MAX_PHOTOS)));
+      }catch(e){}
+    }
+
+    function capturePhoto(){
+      if (!videoEl.videoWidth || !videoEl.videoHeight){
         showMessage('まだカメラの準備中だよ');
         return;
       }
 
-      const ok = drawZoomedFrameToCanvas(hiddenCanvas, video, currentZoom);
-      if (!ok){
-        showMessage('写真を撮れなかった');
-        return;
+      const vw = videoEl.videoWidth;
+      const vh = videoEl.videoHeight;
+      const maxSide = 1280;
+
+      let outW = vw;
+      let outH = vh;
+      if (outW > outH && outW > maxSide){
+        outH = Math.round(outH * (maxSide / outW));
+        outW = maxSide;
+      }else if (outH >= outW && outH > maxSide){
+        outW = Math.round(outW * (maxSide / outH));
+        outH = maxSide;
       }
 
-      hiddenCanvas.toBlob((blob) => {
-        if (!blob){
-          showMessage('写真の保存に失敗した');
-          return;
+      hiddenCanvas.width = outW;
+      hiddenCanvas.height = outH;
+
+      if (currentZoom >= 1){
+        let cropW = vw / currentZoom;
+        let cropH = vh / currentZoom;
+        const targetAspect = outW / outH;
+        const cropAspect = cropW / cropH;
+
+        if (cropAspect > targetAspect){
+          cropW = cropH * targetAspect;
+        }else{
+          cropH = cropW / targetAspect;
         }
-        downloadBlob(blob, `photo_${formatDate()}.jpg`);
-        showMessage('写真を保存したよ', 1200);
-      }, 'image/jpeg', 0.95);
+
+        const sx = (vw - cropW) / 2;
+        const sy = (vh - cropH) / 2;
+        photoCtx.drawImage(videoEl, sx, sy, cropW, cropH, 0, 0, outW, outH);
+      }else{
+        const drawW = outW * currentZoom;
+        const drawH = outH * currentZoom;
+        const dx = (outW - drawW) / 2;
+        const dy = (outH - drawH) / 2;
+        photoCtx.fillStyle = '#000';
+        photoCtx.fillRect(0, 0, outW, outH);
+        photoCtx.drawImage(videoEl, 0, 0, vw, vh, dx, dy, drawW, drawH);
+      }
+
+      const dataUrl = hiddenCanvas.toDataURL('image/jpeg', 0.92);
+      photos.push(dataUrl);
+      if (photos.length > MAX_PHOTOS) photos = photos.slice(-MAX_PHOTOS);
+      saveAlbum();
+      renderAlbum();
+      showMessage('写真を写真欄に入れたよ', 1100);
     }
 
     function startRecording(){
-      if (!stream){
-        showMessage('カメラの準備がまだだよ');
-        return;
-      }
       if (!window.MediaRecorder){
         showMessage('このブラウザは動画録画に対応していないかも');
         return;
@@ -460,8 +631,16 @@
       if (isRecording) return;
 
       const mimeType = getBestMimeType();
+
       try{
-        mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        const streamToRecord = preview.captureStream ? preview.captureStream(30) : null;
+        if (!streamToRecord){
+          showMessage('録画用ストリームを作れなかった');
+          return;
+        }
+
+        recordStream = streamToRecord;
+        mediaRecorder = mimeType ? new MediaRecorder(recordStream, { mimeType }) : new MediaRecorder(recordStream);
       }catch(err){
         console.error(err);
         showMessage('動画録画を開始できなかった');
@@ -469,6 +648,7 @@
       }
 
       recordedChunks = [];
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0){
           recordedChunks.push(e.data);
@@ -479,8 +659,14 @@
         const type = mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : 'video/webm';
         const blob = new Blob(recordedChunks, { type });
         if (blob.size > 0){
-          const ext = type.includes('mp4') ? 'mp4' : 'webm';
-          downloadBlob(blob, `video_${formatDate()}.${ext}`);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `video_${formatDate()}.webm`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
           showMessage('動画を保存したよ', 1200);
         }else{
           showMessage('録画データが空だった');
@@ -501,11 +687,13 @@
 
     function stopRecording(){
       if (!mediaRecorder || !isRecording) return;
+
       try{
         mediaRecorder.stop();
       }catch(err){
         console.error(err);
       }
+
       isRecording = false;
       videoBtn.classList.remove('recording');
       recPill.textContent = 'LIVE';
@@ -517,139 +705,88 @@
       else startRecording();
     }
 
-    async function startCamera(){
-      try{
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          },
-          audio: false
-        });
+    async function toggleFacing(){
+      currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+      await startCamera();
+    }
 
-        video.srcObject = stream;
-        await video.play();
+    function setZoomByIndex(nextIndex){
+      const clamped = Math.max(0, Math.min(zoomLevels.length - 1, nextIndex));
+      if (clamped === zoomIndex) return;
+      zoomIndex = clamped;
+      currentZoom = zoomLevels[zoomIndex];
+      updateZoom();
+    }
 
-        const tracks = stream.getVideoTracks();
-        activeTrack = tracks && tracks[0] ? tracks[0] : null;
+    function zoomStepBySwipe(dy){
+      const steps = Math.floor(Math.abs(dy) / 70);
+      if (steps <= 0) return;
 
-        if (activeTrack){
-          const constraints = activeTrack.getCapabilities ? activeTrack.getCapabilities() : {};
-          supportsTrackZoom = typeof constraints.zoom !== 'undefined';
-          if (supportsTrackZoom){
-            try{
-              const cap = activeTrack.getCapabilities();
-              const z = cap.zoom;
-              if (z){
-                if (typeof z.min === 'number') currentZoom = Math.max(currentZoom, z.min);
-                if (typeof z.max === 'number') maxZoom = Math.min(maxZoom, z.max);
-              }
-            }catch(e){}
-          }
-        }
-
-        updateZoomVisual();
-        showMessage('カメラ準備OK', 1200);
-      }catch(err){
-        console.error(err);
-        showMessage('カメラを使えなかった。権限を確認してね');
+      if (dy < 0){
+        setZoomByIndex(zoomIndex + steps);
+      }else{
+        setZoomByIndex(zoomIndex - steps);
       }
     }
 
-    function getSwipeDirection(dx, dy){
-      if (Math.abs(dx) > Math.abs(dy)) return 'horizontal';
-      return 'vertical';
-    }
+    let swipeStartX = 0;
+    let swipeStartY = 0;
+    let swipeMode = null;
+    let swipeLocked = false;
 
     gestureLayer.addEventListener('pointerdown', (e) => {
-      gestureMode = 'zoom';
-      gestureLocked = false;
       swipeStartX = e.clientX;
       swipeStartY = e.clientY;
-      swipeStartTime = performance.now();
+      swipeMode = 'zoom';
+      swipeLocked = false;
       gestureLayer.setPointerCapture(e.pointerId);
     });
 
-    gestureLayer.addEventListener('pointermove', async (e) => {
-      if (!gestureMode || gestureLocked) return;
+    gestureLayer.addEventListener('pointermove', (e) => {
+      if (swipeMode !== 'zoom' || swipeLocked) return;
 
       const dx = e.clientX - swipeStartX;
       const dy = e.clientY - swipeStartY;
 
       if (Math.abs(dx) < 16 && Math.abs(dy) < 16) return;
 
-      if (getSwipeDirection(dx, dy) === 'vertical'){
-        const distance = dy;
-        const steps = Math.floor(Math.abs(distance) / 70);
-
-        if (steps >= 1){
-          gestureLocked = true;
-          const delta = distance < 0 ? steps : -steps;
-          await setZoom(currentZoom + delta * zoomStep);
-          gestureMode = null;
-        }
+      if (Math.abs(dy) > Math.abs(dx)){
+        swipeLocked = true;
+        zoomStepBySwipe(dy);
+        swipeMode = null;
       }
     });
 
     gestureLayer.addEventListener('pointerup', () => {
-      gestureMode = null;
-      gestureLocked = false;
+      swipeMode = null;
+      swipeLocked = false;
     });
 
     gestureLayer.addEventListener('pointercancel', () => {
-      gestureMode = null;
-      gestureLocked = false;
+      swipeMode = null;
+      swipeLocked = false;
     });
 
-    swapZone.addEventListener('pointerdown', (e) => {
-      gestureMode = 'swap';
-      gestureLocked = false;
-      swipeStartX = e.clientX;
-      swipeStartY = e.clientY;
-      swipeStartTime = performance.now();
-      swapZone.setPointerCapture(e.pointerId);
-      e.preventDefault();
-    });
-
-    swapZone.addEventListener('pointermove', (e) => {
-      if (gestureMode !== 'swap' || gestureLocked) return;
-
-      const dx = e.clientX - swipeStartX;
-      const dy = e.clientY - swipeStartY;
-
-      if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
-
-      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)){
-        gestureLocked = true;
-        toggleSwap();
-        gestureMode = null;
-      }
-    });
-
-    swapZone.addEventListener('pointerup', () => {
-      gestureMode = null;
-      gestureLocked = false;
-    });
-
-    swapZone.addEventListener('pointercancel', () => {
-      gestureMode = null;
-      gestureLocked = false;
-    });
-
+    swapBtn.addEventListener('click', toggleSwap);
+    flipBtn.addEventListener('click', toggleFacing);
     videoBtn.addEventListener('click', toggleRecording);
     photoBtn.addEventListener('click', capturePhoto);
 
+    window.addEventListener('resize', resizeCanvas);
+
     window.addEventListener('beforeunload', () => {
-      if (mediaRecorder && mediaRecorder.state === 'recording'){
-        try{ mediaRecorder.stop(); }catch(e){}
+      renderRunning = false;
+      if (isRecording){
+        try { mediaRecorder.stop(); } catch(e) {}
       }
-      if (stream){
-        stream.getTracks().forEach(t => t.stop());
-      }
+      stopStream();
     });
 
+    loadAlbum();
+    resizeCanvas();
+    updateZoom();
     startCamera();
+    drawFrame();
   </script>
 </body>
 </html>
