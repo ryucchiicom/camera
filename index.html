@@ -481,7 +481,11 @@
       }));
 
       try{
-        if (navigator.canShare && navigator.share && navigator.canShare({ files })){
+        if (
+  navigator.canShare &&
+  navigator.share &&
+  files.every(f => navigator.canShare({ files:[f] }))
+)
           await navigator.share({
             files,
             title: 'Camera Memory',
@@ -595,8 +599,13 @@
         const blob = new Blob(recordedChunks, { type });
         if (blob.size > 0){
           const ext = type.includes('mp4') ? 'mp4' : 'webm';
+
+const fixedType = type.includes('mp4')
+  ? 'video/mp4'
+  : 'video/webm';
           const filename = `video_${formatDate()}.${ext}`;
-          addToMemory('video', blob, filename);
+          const fixedBlob = new Blob([blob], { type: fixedType });
+addToMemory('video', fixedBlob, filename);
           showMessage('動画をメモリに入れたよ', 1200);
         }else{
           showMessage('録画データが空だった');
