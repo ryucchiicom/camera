@@ -382,7 +382,7 @@
 
       const ok = await applyHardwareZoom(currentZoom);
       if (!ok){
-        // iPhone側でズーム制御が効かない場合だけ、見た目ズームにフォールバック
+        // iPhone側でズーム制御が効かない場合だけ、見た目ズームにフォールバック。
         video.style.transform = `scale(${currentZoom})`;
       }else{
         // ハードウェアズームが効くならCSS拡大は外す
