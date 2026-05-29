@@ -570,8 +570,17 @@
       };
 
       mediaRecorder.onstop = () => {
-        const type = mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : 'video/webm';
-        const blob = new Blob(recordedChunks, { type });
+        const rawType = mediaRecorder && mediaRecorder.mimeType
+  ? mediaRecorder.mimeType
+  : 'video/mp4';
+
+const fixedType = rawType.includes('mp4')
+  ? 'video/mp4'
+  : 'video/webm';
+
+const blob = new Blob(recordedChunks, {
+  type: fixedType
+});
         if (blob.size > 0){
           const ext = type.includes('mp4') ? 'mp4' : 'webm';
           const filename = `video_${formatDate()}.${ext}`;
