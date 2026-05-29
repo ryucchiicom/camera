@@ -422,6 +422,27 @@
     }
 
     function getBestMimeType(){
+  if (!window.MediaRecorder) return '';
+
+  // iPhone優先
+  const candidates = [
+    'video/mp4;codecs=h264,aac',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+
+  for (const type of candidates){
+    try{
+      if (MediaRecorder.isTypeSupported(type)){
+        return type;
+      }
+    }catch(e){}
+  }
+
+  return '';
+}
       if (!window.MediaRecorder) return '';
       const candidates = [
         'video/webm;codecs=vp9,opus',
@@ -570,17 +591,8 @@
       };
 
       mediaRecorder.onstop = () => {
-        const rawType = mediaRecorder && mediaRecorder.mimeType
-  ? mediaRecorder.mimeType
-  : 'video/mp4';
-
-const fixedType = rawType.includes('mp4')
-  ? 'video/mp4'
-  : 'video/webm';
-
-const blob = new Blob(recordedChunks, {
-  type: fixedType
-});
+        const type = mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : 'video/webm';
+        const blob = new Blob(recordedChunks, { type });
         if (blob.size > 0){
           const ext = type.includes('mp4') ? 'mp4' : 'webm';
           const filename = `video_${formatDate()}.${ext}`;
