@@ -6,13 +6,12 @@
   <title>Camera App</title>
   <style>
     :root{
-      --bar-h: 176px;
-      --gallery-h: 72px;
+      --bar-h: 128px;
       --btn: 84px;
-      --switch-btn: 44px;
-      --side: 18px;
-      --swap-dur: 340ms;
-      --zoom-dur: 170ms;
+      --flip-btn: 42px;
+      --side: 20px;
+      --swap-dur: 360ms;
+      --zoom-dur: 180ms;
     }
 
     *{
@@ -39,6 +38,7 @@
       background: #000;
       display: flex;
       flex-direction: column;
+      touch-action: none;
     }
 
     #viewport{
@@ -46,6 +46,7 @@
       flex: 1;
       background: #000;
       overflow: hidden;
+      touch-action: none;
     }
 
     #camera{
@@ -55,13 +56,6 @@
       background: #000;
       transform-origin: center center;
       transition: transform var(--zoom-dur) ease;
-    }
-
-    #gestureLayer{
-      position: absolute;
-      inset: 0;
-      z-index: 5;
-      touch-action: none;
     }
 
     #topHud{
@@ -102,123 +96,18 @@
       transform: translateY(0);
     }
 
-    #message{
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 20;
-      max-width: 88%;
-      padding: 14px 16px;
-      border-radius: 16px;
-      background: rgba(0,0,0,.72);
-      color: #fff;
-      text-align: center;
-      font-size: 14px;
-      line-height: 1.5;
-      border: 1px solid rgba(255,255,255,.10);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 180ms ease;
-    }
-
-    #message.show{
-      opacity: 1;
-    }
-
     #controls{
       position: relative;
       height: var(--bar-h);
       background: #000;
       overflow: hidden;
       border-top: 1px solid rgba(255,255,255,.06);
-    }
-
-    #galleryWrap{
-      position: absolute;
-      left: 0;
-      right: 0;
-      top: 0;
-      height: var(--gallery-h);
-      padding: 10px 12px 0;
-      overflow: hidden;
-    }
-
-    #galleryTitle{
-      color: rgba(255,255,255,.72);
-      font-size: 12px;
-      margin-bottom: 6px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      pointer-events: none;
-    }
-
-    #emptyHint{
-      color: rgba(255,255,255,.35);
-      font-size: 12px;
-      margin-left: 6px;
-    }
-
-    #gallery{
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding-bottom: 6px;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-      touch-action: pan-x;
-    }
-
-    #gallery::-webkit-scrollbar{
-      display: none;
-    }
-
-    .captureItem{
-      flex: 0 0 auto;
-      width: 54px;
-      height: 54px;
-      border-radius: 12px;
-      overflow: hidden;
-      position: relative;
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.10);
-    }
-
-    .captureItem img,
-    .captureItem video{
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .captureBadge{
-      position: absolute;
-      left: 4px;
-      top: 4px;
-      padding: 2px 5px;
-      border-radius: 999px;
-      font-size: 9px;
-      line-height: 1;
-      background: rgba(0,0,0,.6);
-      color: #fff;
-      z-index: 2;
-      pointer-events: none;
-    }
-
-    #buttonRow{
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      height: 104px;
+      touch-action: none;
     }
 
     .controlBtn{
       position: absolute;
-      bottom: 18px;
+      bottom: 22px;
       width: var(--btn);
       height: var(--btn);
       border-radius: 50%;
@@ -230,31 +119,52 @@
         transform 120ms ease,
         box-shadow 120ms ease,
         opacity 120ms ease;
-      box-shadow: 0 8px 22px rgba(0,0,0,.42);
+      box-shadow: 0 8px 22px rgba(0,0,0,.4);
       touch-action: manipulation;
     }
 
-    .controlBtn:active,
-    .miniBtn:active{
+    .controlBtn:active{
       transform: scale(.94);
     }
 
     #videoBtn{
       left: var(--side);
       background: #ff2f2f;
-      box-shadow: 0 0 0 4px rgba(255,47,47,.12), 0 8px 22px rgba(0,0,0,.42);
+      box-shadow: 0 0 0 4px rgba(255,47,47,.12), 0 8px 22px rgba(0,0,0,.4);
     }
 
     #photoBtn{
       left: calc(100% - var(--side) - var(--btn));
       background: #fff;
-      box-shadow: 0 0 0 4px rgba(255,255,255,.12), 0 8px 22px rgba(0,0,0,.42);
+      box-shadow: 0 0 0 4px rgba(255,255,255,.12), 0 8px 22px rgba(0,0,0,.4);
+    }
+
+    #controls.swapped #videoBtn{
+      left: calc(100% - var(--side) - var(--btn));
+    }
+
+    #controls.swapped #photoBtn{
+      left: var(--side);
+    }
+
+    #videoBtn.recording{
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse{
+      0%   { box-shadow: 0 0 0 0 rgba(255,47,47,.45), 0 8px 22px rgba(0,0,0,.4); }
+      70%  { box-shadow: 0 0 0 16px rgba(255,47,47,0), 0 8px 22px rgba(0,0,0,.4); }
+      100% { box-shadow: 0 0 0 0 rgba(255,47,47,0), 0 8px 22px rgba(0,0,0,.4); }
     }
 
     .innerDot{
       position: absolute;
       inset: 0;
       margin: auto;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: transparent;
       transition: all 180ms ease;
     }
 
@@ -263,10 +173,6 @@
       height: 28px;
       background: #fff;
       border-radius: 10px;
-    }
-
-    #videoBtn.recording{
-      animation: pulse 1s infinite;
     }
 
     #videoBtn.recording .innerDot{
@@ -284,53 +190,55 @@
       border-radius: 50%;
     }
 
-    #switchBtn{
+    #flipBtn{
       position: absolute;
       left: 50%;
-      bottom: 26px;
+      bottom: 28px;
+      width: var(--flip-btn);
+      height: var(--flip-btn);
       transform: translateX(-50%);
-      width: var(--switch-btn);
-      height: var(--switch-btn);
       border-radius: 50%;
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.08);
-      color: #fff;
+      border: none;
       z-index: 4;
+      background: rgba(255,255,255,.10);
+      color: #fff;
       font-size: 18px;
-      box-shadow: 0 8px 18px rgba(0,0,0,.35);
+      line-height: 1;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.16);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 8px 18px rgba(0,0,0,.35);
+      touch-action: manipulation;
     }
 
-    #swapHint{
-      position: absolute;
-      left: 50%;
-      top: 0;
-      transform: translateX(-50%);
-      width: 130px;
-      height: 100%;
-      z-index: 1;
-      pointer-events: auto;
-      touch-action: none;
+    #flipBtn:active{
+      transform: translateX(-50%) scale(.94);
     }
 
-    #swapHint::before{
-      content: "";
+    #message{
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 86px;
-      height: 44px;
       transform: translate(-50%, -50%);
-      border-radius: 999px;
-      background: rgba(255,255,255,.04);
-      border: 1px solid rgba(255,255,255,.08);
+      z-index: 20;
+      max-width: 88%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(0,0,0,.68);
+      color: #fff;
+      text-align: center;
+      font-size: 14px;
+      line-height: 1.5;
+      border: 1px solid rgba(255,255,255,.10);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
     }
 
-    @keyframes pulse{
-      0%   { box-shadow: 0 0 0 0 rgba(255,47,47,.45), 0 8px 22px rgba(0,0,0,.42); }
-      70%  { box-shadow: 0 0 0 16px rgba(255,47,47,0), 0 8px 22px rgba(0,0,0,.42); }
-      100% { box-shadow: 0 0 0 0 rgba(255,47,47,0), 0 8px 22px rgba(0,0,0,.42); }
+    #message.show{
+      opacity: 1;
     }
 
     #hiddenCanvas{
@@ -342,7 +250,6 @@
   <div id="app">
     <div id="viewport">
       <video id="camera" autoplay playsinline muted></video>
-      <div id="gestureLayer"></div>
 
       <div id="topHud">
         <div class="pill" id="recPill">LIVE</div>
@@ -353,27 +260,15 @@
     </div>
 
     <div id="controls">
-      <div id="galleryWrap">
-        <div id="galleryTitle">
-          <span>アルバム</span>
-          <span id="emptyHint">ここに保存される</span>
-        </div>
-        <div id="gallery"></div>
-      </div>
+      <button id="videoBtn" class="controlBtn" aria-label="動画の開始と停止">
+        <span class="innerDot"></span>
+      </button>
 
-      <div id="buttonRow">
-        <div id="swapHint" aria-label="左右のボタンを入れ替え"></div>
+      <button id="flipBtn" aria-label="前後カメラ切り替え">↺</button>
 
-        <button id="videoBtn" class="controlBtn" aria-label="動画の開始と停止">
-          <span class="innerDot"></span>
-        </button>
-
-        <button id="photoBtn" class="controlBtn" aria-label="写真を撮る">
-          <span class="innerDot"></span>
-        </button>
-
-        <button id="switchBtn" aria-label="前後カメラを切り替え">⇄</button>
-      </div>
+      <button id="photoBtn" class="controlBtn" aria-label="写真を撮る">
+        <span class="innerDot"></span>
+      </button>
     </div>
 
     <canvas id="hiddenCanvas"></canvas>
@@ -381,46 +276,37 @@
 
   <script>
     const video = document.getElementById('camera');
+    const app = document.getElementById('app');
     const viewport = document.getElementById('viewport');
-    const gestureLayer = document.getElementById('gestureLayer');
     const controls = document.getElementById('controls');
-    const swapHint = document.getElementById('swapHint');
     const videoBtn = document.getElementById('videoBtn');
     const photoBtn = document.getElementById('photoBtn');
-    const switchBtn = document.getElementById('switchBtn');
+    const flipBtn = document.getElementById('flipBtn');
     const zoomPill = document.getElementById('zoomPill');
     const recPill = document.getElementById('recPill');
     const messageBox = document.getElementById('message');
     const hiddenCanvas = document.getElementById('hiddenCanvas');
-    const gallery = document.getElementById('gallery');
-    const emptyHint = document.getElementById('emptyHint');
 
     let stream = null;
-    let activeTrack = null;
     let mediaRecorder = null;
     let recordedChunks = [];
     let isRecording = false;
 
-    let swapped = false;
-    let currentFacing = 'environment';
-
-    const zoomLevels = [0.5, 1, 2, 3, 4, 5, 6, 7, 8];
-    let currentZoomIndex = 1; // x1
-    let currentZoom = zoomLevels[currentZoomIndex];
-
+    let currentFacingMode = 'environment';
+    let activeTrack = null;
     let supportsTrackZoom = false;
-    let trackZoomMax = 8;
-    let trackZoomMin = 1;
 
-    let dbPromise = null;
+    let currentZoom = 1;
+    const zoomLevels = [0.5, 1, 2, 3, 4, 5, 6, 7, 8];
+    let maxZoom = 8;
 
-    let pointerDown = false;
-    let startX = 0;
-    let startY = 0;
-    let gestureType = null; // zoom | swap | null
-    let gestureFired = false;
+    let gestureStartX = 0;
+    let gestureStartY = 0;
+    let gestureStartTime = 0;
+    let gestureTarget = null;
+    let gestureLocked = false;
 
-    function showMessage(text, ms = 1800){
+    function showMessage(text, ms = 2200){
       messageBox.textContent = text;
       messageBox.classList.add('show');
       clearTimeout(showMessage._t);
@@ -439,16 +325,51 @@
       showZoom();
     }
 
-    function toggleSwap(){
-      swapped = !swapped;
-
-      if (swapped){
-        videoBtn.style.left = `calc(100% - var(--side) - var(--btn))`;
-        photoBtn.style.left = `var(--side)`;
-      }else{
-        videoBtn.style.left = `var(--side)`;
-        photoBtn.style.left = `calc(100% - var(--side) - var(--btn))`;
+    async function applyHardwareZoom(value){
+      if (!activeTrack || !supportsTrackZoom) return false;
+      try{
+        await activeTrack.applyConstraints({
+          advanced: [{ zoom: value }]
+        });
+        return true;
+      }catch(err){
+        return false;
       }
+    }
+
+    function getNextZoom(direction){
+      const sorted = zoomLevels.filter(z => z <= maxZoom);
+      const idx = sorted.findIndex(z => z === currentZoom);
+
+      if (direction > 0){
+        if (currentZoom < 1){
+          return 1;
+        }
+        const next = sorted[idx + 1];
+        return next ?? sorted[sorted.length - 1];
+      }else{
+        if (currentZoom > 1){
+          return sorted[idx - 1] ?? 1;
+        }
+        return 0.5;
+      }
+    }
+
+    async function setZoom(nextZoom){
+      const clamped = Math.max(0.5, Math.min(maxZoom, nextZoom));
+      if (clamped === currentZoom) return;
+
+      currentZoom = clamped;
+      updateZoomVisual();
+
+      const ok = await applyHardwareZoom(currentZoom);
+      if (!ok && activeTrack){
+        // ハードウェアズーム非対応でも、見た目のズームは維持
+      }
+    }
+
+    function toggleSwap(){
+      controls.classList.toggle('swapped');
     }
 
     function getBestMimeType(){
@@ -458,8 +379,7 @@
         'video/webm;codecs=vp8,opus',
         'video/webm;codecs=vp9',
         'video/webm;codecs=vp8',
-        'video/webm',
-        'video/mp4'
+        'video/webm'
       ];
       for (const type of candidates){
         try{
@@ -467,6 +387,37 @@
         }catch(e){}
       }
       return '';
+    }
+
+    function downloadBlob(blob, filename){
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    async function savePhotoBestEffort(blob, filename){
+      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })){
+        try{
+          await navigator.share({
+            files: [file],
+            title: 'Photo'
+          });
+          showMessage('共有シートを出したよ', 1200);
+          return;
+        }catch(err){
+          // キャンセルや非対応時はダウンロードへ
+        }
+      }
+
+      downloadBlob(blob, filename);
+      showMessage('写真を保存したよ', 1200);
     }
 
     function formatDate(){
@@ -482,7 +433,7 @@
       );
     }
 
-    function drawZoomedFrameToCanvas(canvas, sourceVideo, zoom){
+    function drawFrameToCanvas(canvas, sourceVideo, zoom){
       const ctx = canvas.getContext('2d', { willReadFrequently: false });
       const vw = sourceVideo.videoWidth;
       const vh = sourceVideo.videoHeight;
@@ -492,162 +443,24 @@
       canvas.width = vw;
       canvas.height = vh;
 
-      if (zoom <= 1){
-        ctx.drawImage(sourceVideo, 0, 0, vw, vh);
-        return true;
-      }
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, vw, vh);
 
-      const cropW = vw / zoom;
-      const cropH = vh / zoom;
-      const sx = Math.max(0, (vw - cropW) / 2);
-      const sy = Math.max(0, (vh - cropH) / 2);
-
-      ctx.drawImage(sourceVideo, sx, sy, cropW, cropH, 0, 0, vw, vh);
-      return true;
-    }
-
-    function openDB(){
-      if (dbPromise) return dbPromise;
-
-      dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open('camera_app_db', 1);
-
-        req.onupgradeneeded = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains('captures')){
-            db.createObjectStore('captures', { keyPath: 'id' });
-          }
-        };
-
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-
-      return dbPromise;
-    }
-
-    async function saveCapture(kind, blob){
-      const db = await openDB();
-      const id = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-      const item = { id, kind, blob, createdAt: Date.now() };
-
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction('captures', 'readwrite');
-        tx.objectStore('captures').put(item);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-
-      return item;
-    }
-
-    async function loadCaptures(){
-      const db = await openDB();
-      const items = await new Promise((resolve, reject) => {
-        const tx = db.transaction('captures', 'readonly');
-        const req = tx.objectStore('captures').getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-      });
-
-      items.sort((a, b) => b.createdAt - a.createdAt);
-      return items;
-    }
-
-    function renderGalleryItem(item){
-      const wrap = document.createElement('div');
-      wrap.className = 'captureItem';
-
-      const badge = document.createElement('div');
-      badge.className = 'captureBadge';
-      badge.textContent = item.kind === 'video' ? 'V' : 'P';
-      wrap.appendChild(badge);
-
-      const url = URL.createObjectURL(item.blob);
-
-      if (item.kind === 'photo'){
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = 'photo';
-        wrap.appendChild(img);
+      if (zoom >= 1){
+        const cropW = vw / zoom;
+        const cropH = vh / zoom;
+        const sx = Math.max(0, (vw - cropW) / 2);
+        const sy = Math.max(0, (vh - cropH) / 2);
+        ctx.drawImage(sourceVideo, sx, sy, cropW, cropH, 0, 0, vw, vh);
       }else{
-        const vid = document.createElement('video');
-        vid.src = url;
-        vid.muted = true;
-        vid.loop = true;
-        vid.playsInline = true;
-        vid.autoplay = true;
-        vid.controls = false;
-        wrap.appendChild(vid);
-        vid.play().catch(()=>{});
+        const drawW = vw * zoom;
+        const drawH = vh * zoom;
+        const dx = (vw - drawW) / 2;
+        const dy = (vh - drawH) / 2;
+        ctx.drawImage(sourceVideo, dx, dy, drawW, drawH);
       }
 
-      gallery.prepend(wrap);
-      emptyHint.style.display = 'none';
-    }
-
-    async function refreshGallery(){
-      gallery.innerHTML = '';
-      const items = await loadCaptures();
-      if (!items.length){
-        emptyHint.style.display = 'inline';
-        return;
-      }
-      emptyHint.style.display = 'none';
-      for (const item of items){
-        renderGalleryItem(item);
-      }
-    }
-
-    function nextZoom(){
-      if (currentZoomIndex < zoomLevels.length - 1){
-        currentZoomIndex++;
-        currentZoom = zoomLevels[currentZoomIndex];
-        return true;
-      }
-      return false;
-    }
-
-    function prevZoom(){
-      if (currentZoomIndex > 0){
-        currentZoomIndex--;
-        currentZoom = zoomLevels[currentZoomIndex];
-        return true;
-      }
-      return false;
-    }
-
-    async function applyHardwareZoom(value){
-      if (!activeTrack || !supportsTrackZoom) return false;
-      const clamped = Math.max(trackZoomMin, Math.min(trackZoomMax, value));
-      try{
-        await activeTrack.applyConstraints({
-          advanced: [{ zoom: clamped }]
-        });
-        return true;
-      }catch(err){
-        return false;
-      }
-    }
-
-    async function setZoomByIndex(nextIndex){
-      const clamped = Math.max(0, Math.min(zoomLevels.length - 1, nextIndex));
-      if (clamped === currentZoomIndex) return;
-
-      currentZoomIndex = clamped;
-      currentZoom = zoomLevels[currentZoomIndex];
-      updateZoomVisual();
-      await applyHardwareZoom(currentZoom);
-    }
-
-    async function zoomUp(){
-      if (currentZoomIndex >= zoomLevels.length - 1) return;
-      await setZoomByIndex(currentZoomIndex + 1);
-    }
-
-    async function zoomDown(){
-      if (currentZoomIndex <= 0) return;
-      await setZoomByIndex(currentZoomIndex - 1);
+      return true;
     }
 
     async function capturePhoto(){
@@ -656,7 +469,7 @@
         return;
       }
 
-      const ok = drawZoomedFrameToCanvas(hiddenCanvas, video, currentZoom);
+      const ok = drawFrameToCanvas(hiddenCanvas, video, currentZoom);
       if (!ok){
         showMessage('写真を撮れなかった');
         return;
@@ -667,11 +480,22 @@
           showMessage('写真の保存に失敗した');
           return;
         }
-
-        await saveCapture('photo', blob);
-        await refreshGallery();
-        showMessage('写真をアルバムに入れたよ', 1200);
+        await savePhotoBestEffort(blob, `photo_${formatDate()}.jpg`);
       }, 'image/jpeg', 0.95);
+    }
+
+    function stopRecording(){
+      if (!mediaRecorder || !isRecording) return;
+
+      try{
+        mediaRecorder.stop();
+      }catch(err){
+        console.error(err);
+      }
+      isRecording = false;
+      videoBtn.classList.remove('recording');
+      recPill.textContent = 'LIVE';
+      showMessage('録画ストップ', 1000);
     }
 
     function startRecording(){
@@ -686,29 +510,29 @@
       if (isRecording) return;
 
       const mimeType = getBestMimeType();
-
       try{
         mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       }catch(err){
         console.error(err);
-        showMessage('動画録画を開始できなかった');
+        showMessage('録画を開始できなかった');
         return;
       }
 
       recordedChunks = [];
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0){
           recordedChunks.push(e.data);
         }
       };
 
-      mediaRecorder.onstop = async () => {
+      mediaRecorder.onstop = () => {
         const type = mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : 'video/webm';
         const blob = new Blob(recordedChunks, { type });
         if (blob.size > 0){
-          await saveCapture('video', blob);
-          await refreshGallery();
-          showMessage('動画をアルバムに入れたよ', 1200);
+          const ext = type.includes('mp4') ? 'mp4' : 'webm';
+          downloadBlob(blob, `video_${formatDate()}.${ext}`);
+          showMessage('動画を保存したよ', 1200);
         }else{
           showMessage('録画データが空だった');
         }
@@ -726,48 +550,25 @@
       }
     }
 
-    function stopRecording(){
-      if (!mediaRecorder || !isRecording) return;
-
-      try{
-        mediaRecorder.stop();
-      }catch(err){
-        console.error(err);
-      }
-
-      isRecording = false;
-      videoBtn.classList.remove('recording');
-      recPill.textContent = 'LIVE';
-      showMessage('録画ストップ', 1000);
-    }
-
     function toggleRecording(){
       if (isRecording) stopRecording();
       else startRecording();
     }
 
-    async function stopCamera(){
-      if (stream){
-        stream.getTracks().forEach(t => t.stop());
-      }
-      stream = null;
-      activeTrack = null;
-      supportsTrackZoom = false;
-    }
-
-    async function startCamera(facing = currentFacing){
-      currentFacing = facing;
-
-      await stopCamera();
-
+    async function startCamera(){
       try{
+        if (stream){
+          stream.getTracks().forEach(t => t.stop());
+          stream = null;
+        }
+
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: facing },
+            facingMode: { ideal: currentFacingMode },
             width: { ideal: 1920 },
             height: { ideal: 1080 }
           },
-          audio: true
+          audio: false
         });
 
         video.srcObject = stream;
@@ -776,104 +577,100 @@
         const tracks = stream.getVideoTracks();
         activeTrack = tracks && tracks[0] ? tracks[0] : null;
 
-        if (activeTrack && activeTrack.getCapabilities){
-          const caps = activeTrack.getCapabilities();
-          supportsTrackZoom = typeof caps.zoom !== 'undefined';
+        supportsTrackZoom = false;
+        maxZoom = 8;
+        currentZoom = Math.max(0.5, Math.min(currentZoom, maxZoom));
 
-          if (supportsTrackZoom){
-            if (typeof caps.zoom.min === 'number') trackZoomMin = caps.zoom.min;
-            if (typeof caps.zoom.max === 'number') trackZoomMax = caps.zoom.max;
-            await applyHardwareZoom(currentZoom);
-          }
+        if (activeTrack && activeTrack.getCapabilities){
+          try{
+            const cap = activeTrack.getCapabilities();
+            if (cap && typeof cap.zoom !== 'undefined'){
+              supportsTrackZoom = true;
+              if (cap.zoom){
+                if (typeof cap.zoom.max === 'number'){
+                  maxZoom = Math.min(maxZoom, cap.zoom.max);
+                }
+                if (typeof cap.zoom.min === 'number' && cap.zoom.min > 0){
+                  // 0.5 は画面上の見た目用として残す
+                  currentZoom = Math.max(currentZoom, Math.min(1, cap.zoom.min));
+                }
+              }
+            }
+          }catch(e){}
         }
 
         updateZoomVisual();
-        showMessage(facing === 'environment' ? '背面カメラ' : '前面カメラ', 1000);
+        showMessage(currentFacingMode === 'environment' ? '背面カメラ' : '前面カメラ', 900);
       }catch(err){
         console.error(err);
         showMessage('カメラを使えなかった。権限を確認してね');
       }
     }
 
-    async function toggleCameraFacing(){
-      const nextFacing = currentFacing === 'environment' ? 'user' : 'environment';
-      await startCamera(nextFacing);
-    }
-
-    function shouldIgnoreTarget(target){
-      return !!target.closest('button');
-    }
-
-    function handlePointerDown(e, zone){
-      if (shouldIgnoreTarget(e.target)) return;
-
-      pointerDown = true;
-      gestureType = zone;
-      gestureFired = false;
-      startX = e.clientX;
-      startY = e.clientY;
-
-      try{
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }catch(err){}
-    }
-
-    function handlePointerMove(e){
-      if (!pointerDown || gestureFired) return;
-
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-
-      if (Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
-
-      const horizontal = Math.abs(dx) > Math.abs(dy);
-
-      if (gestureType === 'swap'){
-        if (horizontal && Math.abs(dx) > 42){
-          gestureFired = true;
-          toggleSwap();
-        }
-      }else{
-        if (!horizontal && Math.abs(dy) > 42){
-          gestureFired = true;
-          if (dy < 0) zoomUp();
-          else zoomDown();
-        }
+    async function switchCamera(){
+      if (isRecording){
+        stopRecording();
       }
+      currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+      await startCamera();
     }
 
-    function handlePointerUp(){
-      pointerDown = false;
-      gestureType = null;
-      gestureFired = false;
-    }
+    function handleSwipe(startX, startY, endX, endY, targetIsControlArea){
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
 
-    // 画面上はズーム、下のボタン帯はズームか左右スワイプで切り替え
-    gestureLayer.addEventListener('pointerdown', (e) => handlePointerDown(e, 'zoom'));
-    gestureLayer.addEventListener('pointermove', handlePointerMove);
-    gestureLayer.addEventListener('pointerup', handlePointerUp);
-    gestureLayer.addEventListener('pointercancel', handlePointerUp);
+      if (adx < 18 && ady < 18) return;
 
-    controls.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('button')) return;
-      if (e.target.closest('#gallery')) return;
-
-      const rect = controls.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-
-      if (y < 74){
+      if (ady > adx){
+        const direction = dy < 0 ? 1 : -1;
+        const nextZoom = getNextZoom(direction);
+        setZoom(nextZoom);
         return;
       }
 
-      handlePointerDown(e, 'swap');
+      if (targetIsControlArea && adx > ady){
+        toggleSwap();
+      }
+    }
+
+    app.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) return;
+
+      gestureTarget = e.target;
+      gestureLocked = false;
+      gestureStartX = e.clientX;
+      gestureStartY = e.clientY;
+      gestureStartTime = performance.now();
+
+      try{
+        app.setPointerCapture(e.pointerId);
+      }catch(err){}
     });
-    controls.addEventListener('pointermove', handlePointerMove);
-    controls.addEventListener('pointerup', handlePointerUp);
-    controls.addEventListener('pointercancel', handlePointerUp);
+
+    app.addEventListener('pointerup', (e) => {
+      if (e.target.closest('button')) return;
+      if (!gestureTarget) return;
+
+      const endX = e.clientX;
+      const endY = e.clientY;
+      const startInControls = gestureStartY >= (window.innerHeight - 128);
+
+      handleSwipe(gestureStartX, gestureStartY, endX, endY, startInControls);
+
+      gestureTarget = null;
+      gestureLocked = false;
+    });
+
+    app.addEventListener('pointercancel', () => {
+      gestureTarget = null;
+      gestureLocked = false;
+    });
 
     videoBtn.addEventListener('click', toggleRecording);
     photoBtn.addEventListener('click', capturePhoto);
-    switchBtn.addEventListener('click', toggleCameraFacing);
+    flipBtn.addEventListener('click', switchCamera);
 
     window.addEventListener('beforeunload', () => {
       if (mediaRecorder && mediaRecorder.state === 'recording'){
@@ -884,10 +681,7 @@
       }
     });
 
-    (async () => {
-      await refreshGallery();
-      await startCamera('environment');
-    })();
+    startCamera();
   </script>
 </body>
 </html>
