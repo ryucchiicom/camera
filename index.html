@@ -450,10 +450,85 @@
     }
 
     async function saveMemory(){
-      if (!memoryItems.length){
-        showMessage('保存するものがまだないよ');
-        return;
+  if (!memoryItems.length){
+    showMessage('保存するものがまだないよ');
+    return;
+  }
+
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+  const photoFiles = [];
+  const videoFiles = [];
+
+  for (const item of memoryItems){
+    const file = new File(
+      [item.blob],
+      item.filename,
+      {
+        type: item.type || item.blob.type || 'application/octet-stream'
       }
+    );
+
+    if (item.kind === 'video'){
+      videoFiles.push(file);
+    }else{
+      photoFiles.push(file);
+    }
+  }
+
+  try{
+    // 写真まとめ共有
+    if (photoFiles.length){
+      if (
+        navigator.canShare &&
+        navigator.share &&
+        navigator.canShare({ files: photoFiles })
+      ){
+        await navigator.share({
+          files: photoFiles,
+          title: 'Photos',
+          text: '保存した写真'
+        });
+
+        await wait(300);
+      }else{
+        for (const file of photoFiles){
+          downloadBlob(file, file.name);
+          await wait(120);
+        }
+      }
+    }
+
+    // 動画まとめ共有
+    if (videoFiles.length){
+      if (
+        navigator.canShare &&
+        navigator.share &&
+        navigator.canShare({ files: videoFiles })
+      ){
+        await navigator.share({
+          files: videoFiles,
+          title: 'Videos',
+          text: '保存した動画'
+        });
+
+        await wait(300);
+      }else{
+        for (const file of videoFiles){
+          downloadBlob(file, file.name);
+          await wait(120);
+        }
+      }
+    }
+
+    clearMemory();
+    showMessage('メモリから保存したよ', 1600);
+
+  }catch(err){
+    console.log(err);
+    showMessage('保存がキャンセルされたか失敗した');
+  }
+}
 
       const files = memoryItems.map(item => new File([item.blob], item.filename, {
         type: item.type || item.blob.type || 'application/octet-stream'
