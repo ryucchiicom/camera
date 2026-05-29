@@ -70,10 +70,10 @@
       right: 12px;
       z-index: 10;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      pointer-events: none;
       gap: 8px;
+      pointer-events: none;
     }
 
     .pill{
@@ -91,23 +91,21 @@
 
     .pillButton{
       cursor: pointer;
-      pointer-events: auto;
     }
 
     #zoomPill{
       position: absolute;
       top: 12px;
-      right: 12px;
-      z-index: 10;
+      left: 12px;
+      z-index: 11;
       pointer-events: auto;
-      opacity: 0;
-      transform: translateY(-6px);
-      transition: opacity 180ms ease, transform 180ms ease;
-    }
-
-    #zoomPill.show{
       opacity: 1;
       transform: translateY(0);
+      transition: transform 180ms ease, opacity 180ms ease;
+    }
+
+    #zoomPill.flash{
+      transform: scale(1.08);
     }
 
     #controls{
@@ -254,7 +252,7 @@
       <div id="gestureLayer"></div>
 
       <div id="topHud">
-        <div class="pill" id="recPill">LIVE</div>
+        <div></div>
         <div class="pill pillButton" id="memorySaveBtn">メモリ保存 0</div>
       </div>
 
@@ -286,7 +284,6 @@
     const photoBtn = document.getElementById('photoBtn');
     const switchBtn = document.getElementById('switchBtn');
     const zoomPill = document.getElementById('zoomPill');
-    const recPill = document.getElementById('recPill');
     const messageBox = document.getElementById('message');
     const hiddenCanvas = document.getElementById('hiddenCanvas');
     const memorySaveBtn = document.getElementById('memorySaveBtn');
@@ -304,6 +301,9 @@
 
     let activeTrack = null;
     let supportsTrackZoom = false;
+    let hardwareZoomMin = 1;
+    let hardwareZoomMax = 1;
+    let hardwareZoomAvailable = false;
 
     let swipeStartX = 0;
     let swipeStartY = 0;
@@ -319,11 +319,10 @@
       showMessage._t = setTimeout(() => messageBox.classList.remove('show'), ms);
     }
 
-    function showZoom(){
-      zoomPill.textContent = `x${formatZoom(currentZoom)}`;
-      zoomPill.classList.add('show');
-      clearTimeout(showZoom._t);
-      showZoom._t = setTimeout(() => zoomPill.classList.remove('show'), 900);
+    function flashZoom(){
+      zoomPill.classList.add('flash');
+      clearTimeout(flashZoom._t);
+      flashZoom._t = setTimeout(() => zoomPill.classList.remove('flash'), 160);
     }
 
     function formatZoom(z){
@@ -331,32 +330,39 @@
     }
 
     function updateZoomVisual(){
-      video.style.transform = `scale(${currentZoom})`;
-      showZoom();
+      zoomPill.textContent = `x${formatZoom(currentZoom)}`;
+      flashZoom();
+      if (!hardwareZoomAvailable || currentZoom < hardwareZoomMin || currentZoom > hardwareZoomMax){
+        video.style.transform = `scale(${currentZoom})`;
+      }else{
+        video.style.transform = `none`;
+      }
     }
 
     function getNextZoom(direction){
       const idx = zoomLevels.findIndex(v => Math.abs(v - currentZoom) < 0.001);
-      if (idx === -1){
-        let nearest = 1;
-        let best = Infinity;
-        for (let i = 0; i < zoomLevels.length; i++){
-          const d = Math.abs(zoomLevels[i] - currentZoom);
-          if (d < best){
-            best = d;
-            nearest = i;
-          }
-        }
-        const nextIdx = direction === 'up' ? Math.min(zoomLevels.length - 1, nearest + 1) : Math.max(0, nearest - 1);
-        return zoomLevels[nextIdx];
+      if (idx !== -1){
+        if (direction === 'up') return zoomLevels[Math.min(zoomLevels.length - 1, idx + 1)];
+        return zoomLevels[Math.max(0, idx - 1)];
       }
 
-      if (direction === 'up') return zoomLevels[Math.min(zoomLevels.length - 1, idx + 1)];
-      return zoomLevels[Math.max(0, idx - 1)];
+      let nearest = 0;
+      let best = Infinity;
+      for (let i = 0; i < zoomLevels.length; i++){
+        const d = Math.abs(zoomLevels[i] - currentZoom);
+        if (d < best){
+          best = d;
+          nearest = i;
+        }
+      }
+
+      if (direction === 'up') return zoomLevels[Math.min(zoomLevels.length - 1, nearest + 1)];
+      return zoomLevels[Math.max(0, nearest - 1)];
     }
 
     async function applyHardwareZoom(value){
       if (!activeTrack || !supportsTrackZoom) return false;
+
       try{
         await activeTrack.applyConstraints({
           advanced: [{ zoom: value }]
@@ -373,7 +379,15 @@
 
       currentZoom = clamped;
       updateZoomVisual();
-      await applyHardwareZoom(currentZoom);
+
+      const ok = await applyHardwareZoom(currentZoom);
+      if (!ok){
+        // iPhone側でズーム制御が効かない場合だけ、見た目ズームにフォールバック
+        video.style.transform = `scale(${currentZoom})`;
+      }else{
+        // ハードウェアズームが効くならCSS拡大は外す
+        video.style.transform = `none`;
+      }
     }
 
     function toggleSwap(){
@@ -460,7 +474,6 @@
         console.log('share failed', err);
       }
 
-      // フォールバック: まとめてダウンロード
       for (const item of memoryItems){
         downloadBlob(item.blob, item.filename);
         await new Promise(r => setTimeout(r, 140));
@@ -573,7 +586,6 @@
         mediaRecorder.start();
         isRecording = true;
         videoBtn.classList.add('recording');
-        recPill.textContent = 'REC';
         showMessage('録画スタート', 1000);
       }catch(err){
         console.error(err);
@@ -590,7 +602,6 @@
       }
       isRecording = false;
       videoBtn.classList.remove('recording');
-      recPill.textContent = 'LIVE';
       showMessage('録画ストップ', 1000);
     }
 
@@ -605,6 +616,9 @@
         stream = null;
         activeTrack = null;
         supportsTrackZoom = false;
+        hardwareZoomAvailable = false;
+        hardwareZoomMin = 1;
+        hardwareZoomMax = 1;
       }
     }
 
@@ -628,12 +642,33 @@
         activeTrack = tracks && tracks[0] ? tracks[0] : null;
 
         supportsTrackZoom = false;
+        hardwareZoomAvailable = false;
+
         if (activeTrack && activeTrack.getCapabilities){
           const cap = activeTrack.getCapabilities();
           supportsTrackZoom = typeof cap.zoom !== 'undefined';
+
+          if (supportsTrackZoom && cap.zoom){
+            hardwareZoomAvailable = true;
+            hardwareZoomMin = typeof cap.zoom.min === 'number' ? cap.zoom.min : 1;
+            hardwareZoomMax = typeof cap.zoom.max === 'number' ? cap.zoom.max : 1;
+          }
         }
 
-        updateZoomVisual();
+        // 0.5x が使えるなら、実機ズームを優先して有効化
+        if (hardwareZoomAvailable && currentZoom === 0.5 && hardwareZoomMin <= 0.5){
+          await applyHardwareZoom(0.5);
+          video.style.transform = 'none';
+        }else{
+          updateZoomVisual();
+          const ok = await applyHardwareZoom(currentZoom);
+          if (!ok){
+            video.style.transform = `scale(${currentZoom})`;
+          }else{
+            video.style.transform = 'none';
+          }
+        }
+
         showMessage(facingMode === 'user' ? 'インカメラにしたよ' : '外カメラにしたよ', 1000);
       }catch(err){
         console.error(err);
@@ -668,7 +703,6 @@
 
       if (Math.abs(dx) < 16 && Math.abs(dy) < 16) return;
 
-      // 画面全体で上下スワイプズーム
       if (getSwipeDirection(dx, dy) === 'vertical'){
         const distance = dy;
         const steps = Math.floor(Math.abs(distance) / 70);
@@ -735,6 +769,7 @@
     });
 
     updateMemoryButton();
+    zoomPill.textContent = 'x1';
     startCamera(currentFacing);
   </script>
 </body>
