@@ -422,27 +422,21 @@
     }
 
     function getBestMimeType(){
-  if (!window.MediaRecorder) return '';
-
-  // iPhone優先
-  const candidates = [
-    'video/mp4;codecs=h264,aac',
-    'video/mp4',
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm'
-  ];
-
-  for (const type of candidates){
-    try{
-      if (MediaRecorder.isTypeSupported(type)){
-        return type;
+      if (!window.MediaRecorder) return '';
+      const candidates = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+      ];
+      for (const type of candidates){
+        try{
+          if (MediaRecorder.isTypeSupported(type)) return type;
+        }catch(e){}
       }
-    }catch(e){}
-  }
-
-  return '';
-}
+      return '';
+    }
 
     function downloadBlob(blob, filename){
       const url = URL.createObjectURL(blob);
@@ -466,23 +460,16 @@
       }));
 
       try{
-        if (
-  navigator.canShare &&
-  navigator.share &&
-  files.every(f => navigator.canShare({ files:[f] }))
-){
-  await navigator.share({
+        if (navigator.canShare && navigator.share && navigator.canShare({ files })){
+          await navigator.share({
             files,
             title: 'Camera Memory',
             text: '保存した写真と動画'
           });
           clearMemory();
           showMessage('メモリから保存したよ', 1600);
-
           return;
         }
-      }
-
       }catch(err){
         console.log('share failed', err);
       }
@@ -587,13 +574,8 @@
         const blob = new Blob(recordedChunks, { type });
         if (blob.size > 0){
           const ext = type.includes('mp4') ? 'mp4' : 'webm';
-
-const fixedType = type.includes('mp4')
-  ? 'video/mp4'
-  : 'video/webm';
           const filename = `video_${formatDate()}.${ext}`;
-          const fixedBlob = new Blob([blob], { type: fixedType });
-addToMemory('video', fixedBlob, filename);
+          addToMemory('video', blob, filename);
           showMessage('動画をメモリに入れたよ', 1200);
         }else{
           showMessage('録画データが空だった');
