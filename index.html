@@ -15,6 +15,7 @@
       --zoom-dur: 180ms;
       --safe-b: env(safe-area-inset-bottom);
       --safe-t: env(safe-area-inset-top);
+      --shell-bg: #000;
     }
 
     *{
@@ -27,7 +28,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #000;
+      background: var(--shell-bg);
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       user-select: none;
       -webkit-user-select: none;
@@ -42,11 +43,13 @@
 
     #shell{
       position: fixed;
-      top: 0;
-      left: 0;
-      transform-origin: top left;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      transform-origin: center center;
       overflow: hidden;
-      background: #000;
+      background: var(--shell-bg);
+      border-radius: 0;
     }
 
     #app{
@@ -68,11 +71,19 @@
 
     #previewCanvas{
       position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
+      left: 0;
+      top: 0;
       display: block;
       background: #000;
+      transform-origin: center center;
+      transition: transform var(--zoom-dur) ease;
+    }
+
+    #frameMaskCanvas{
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      pointer-events: none;
     }
 
     #cameraSource{
@@ -134,15 +145,18 @@
     #controls{
       position: relative;
       height: var(--panel-h-collapsed);
-      background: rgba(0,0,0,.72);
+      background: rgba(0,0,0,.58);
       overflow: hidden;
       border-top: 1px solid rgba(255,255,255,.06);
       padding-bottom: var(--safe-b);
-      transition: height 240ms ease;
+      transition: height 240ms ease, background 240ms ease;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
 
     #controls.expanded{
       height: var(--panel-h-expanded);
+      background: rgba(0,0,0,.68);
     }
 
     #settingsPanel{
@@ -327,6 +341,7 @@
     <div id="app">
       <div id="viewport">
         <canvas id="previewCanvas"></canvas>
+        <canvas id="frameMaskCanvas"></canvas>
         <video id="cameraSource" autoplay playsinline muted></video>
         <div id="gestureLayer"></div>
 
@@ -372,6 +387,9 @@
     const previewCanvas = document.getElementById('previewCanvas');
     const previewCtx = previewCanvas.getContext('2d', { alpha: false });
 
+    const frameMaskCanvas = document.getElementById('frameMaskCanvas');
+    const frameMaskCtx = frameMaskCanvas.getContext('2d', { alpha: true });
+
     const hiddenCaptureCanvas = document.getElementById('hiddenCaptureCanvas');
     const hiddenCaptureCtx = hiddenCaptureCanvas.getContext('2d', { alpha: false });
 
@@ -396,7 +414,8 @@
       '1:1': 1
     };
 
-    const VIDEO_BASE = 1280;
+    const PREVIEW_MAX_W = 1280;
+    const PREVIEW_MAX_H = 1280;
     const PHOTO_BASE = 1920;
 
     let selectedAspect = '9:16';
@@ -422,8 +441,6 @@
     let hardwareZoomAvailable = false;
     let hardwareZoomMin = 1;
     let hardwareZoomMax = 1;
-    let hardwareZoomUsed = false;
-    let trackZoomValue = 1;
 
     let controlsSwipeActive = false;
     let controlsSwipeLocked = false;
@@ -476,47 +493,94 @@
       return ASPECTS[selectedAspect] || ASPECTS['9:16'];
     }
 
-    function getOutputSize(mode = 'preview'){
-      const base = mode === 'photo' ? PHOTO_BASE : VIDEO_BASE;
+    function getEffectiveRatio(){
       const ratio = getAspectRatioValue();
-      const landscape = followDeviceRotation && isLandscapeDevice();
+      if (!followDeviceRotation) return ratio;
+      return isLandscapeDevice() ? (1 / ratio) : ratio;
+    }
 
-      if (!landscape){
-        return {
-          width: base,
-          height: Math.round(base / ratio)
-        };
+    function getPreviewCanvasSize(){
+      const ratio = getEffectiveRatio();
+      const vw = viewport.clientWidth || 1;
+      const vh = viewport.clientHeight || 1;
+
+      let w = vw;
+      let h = Math.round(w / ratio);
+
+      if (h > vh){
+        h = vh;
+        w = Math.round(h * ratio);
+      }
+
+      if (w > PREVIEW_MAX_W){
+        const scale = PREVIEW_MAX_W / w;
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+
+      if (h > PREVIEW_MAX_H){
+        const scale = PREVIEW_MAX_H / h;
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+
+      return { width: Math.max(1, w), height: Math.max(1, h) };
+    }
+
+    function getPhotoCanvasSize(){
+      const ratio = getEffectiveRatio();
+      const base = PHOTO_BASE;
+      let width = base;
+      let height = Math.round(width / ratio);
+
+      if (height > base * 2){
+        height = base * 2;
+        width = Math.round(height * ratio);
       }
 
       return {
-        width: Math.round(base / ratio),
-        height: base
+        width: Math.max(1, width),
+        height: Math.max(1, height)
       };
     }
 
-    function layoutPreviewCanvas(){
-      const { width: cw, height: ch } = getOutputSize('preview');
-      const vw = viewport.clientWidth;
-      const vh = viewport.clientHeight;
+    function fitShell(){
+      const vw = window.innerWidth || 1;
+      const vh = window.innerHeight || 1;
 
-      previewCanvas.width = cw;
-      previewCanvas.height = ch;
+      let shellW = Math.min(vw, Math.round(vh * 9 / 16));
+      let shellH = Math.round(shellW * 16 / 9);
 
-      const scale = Math.min(vw / cw, vh / ch);
-      const cssW = Math.max(1, Math.round(cw * scale));
-      const cssH = Math.max(1, Math.round(ch * scale));
+      if (shellH > vh){
+        shellH = vh;
+        shellW = Math.round(shellH * 9 / 16);
+      }
 
-      previewCanvas.style.width = `${cssW}px`;
-      previewCanvas.style.height = `${cssH}px`;
+      shell.style.width = `${shellW}px`;
+      shell.style.height = `${shellH}px`;
     }
 
-    function layoutCaptureCanvas(){
-      const { width: cw, height: ch } = getOutputSize('photo');
-      hiddenCaptureCanvas.width = cw;
-      hiddenCaptureCanvas.height = ch;
+    function resizeCanvases(){
+      const p = getPreviewCanvasSize();
+      if (previewCanvas.width !== p.width) previewCanvas.width = p.width;
+      if (previewCanvas.height !== p.height) previewCanvas.height = p.height;
+
+      previewCanvas.style.width = `${p.width}px`;
+      previewCanvas.style.height = `${p.height}px`;
+      previewCanvas.style.left = `${Math.round((viewport.clientWidth - p.width) / 2)}px`;
+      previewCanvas.style.top = `${Math.round((viewport.clientHeight - p.height) / 2)}px`;
+
+      frameMaskCanvas.width = viewport.clientWidth || 1;
+      frameMaskCanvas.height = viewport.clientHeight || 1;
+      frameMaskCanvas.style.width = `${viewport.clientWidth}px`;
+      frameMaskCanvas.style.height = `${viewport.clientHeight}px`;
+
+      const ph = getPhotoCanvasSize();
+      hiddenCaptureCanvas.width = ph.width;
+      hiddenCaptureCanvas.height = ph.height;
     }
 
-    function drawVideoFrameToCanvas(ctx, canvas){
+    function drawVideoFrameToCanvas(ctx, canvas, fitMode = 'cover'){
       const cw = canvas.width;
       const ch = canvas.height;
 
@@ -536,10 +600,11 @@
       const effectiveW = quarterTurn ? sourceH : sourceW;
       const effectiveH = quarterTurn ? sourceW : sourceH;
 
-      const zoom = hardwareZoomUsed ? 1 : currentZoom;
-      const baseScale = zoom >= 1
-        ? Math.max(cw / effectiveW, ch / effectiveH)
-        : Math.min(cw / effectiveW, ch / effectiveH);
+      const zoom = hardwareZoomAvailable ? 1 : currentZoom;
+
+      const baseScale = fitMode === 'contain'
+        ? Math.min(cw / effectiveW, ch / effectiveH)
+        : Math.max(cw / effectiveW, ch / effectiveH);
 
       const scale = baseScale * zoom;
       const drawW = sourceW * scale;
@@ -552,8 +617,44 @@
       ctx.restore();
     }
 
+    function drawFrameMask(){
+      const cw = frameMaskCanvas.width;
+      const ch = frameMaskCanvas.height;
+
+      frameMaskCtx.clearRect(0, 0, cw, ch);
+
+      const ratio = getEffectiveRatio();
+      const viewRatio = cw / ch;
+
+      let frameW, frameH;
+      if (viewRatio > ratio){
+        frameH = ch;
+        frameW = Math.round(ch * ratio);
+      }else{
+        frameW = cw;
+        frameH = Math.round(cw / ratio);
+      }
+
+      const x = Math.round((cw - frameW) / 2);
+      const y = Math.round((ch - frameH) / 2);
+
+      frameMaskCtx.fillStyle = 'rgba(0,0,0,0.34)';
+      frameMaskCtx.fillRect(0, 0, cw, ch);
+      frameMaskCtx.clearRect(x, y, frameW, frameH);
+
+      frameMaskCtx.strokeStyle = 'rgba(255,255,255,0.22)';
+      frameMaskCtx.lineWidth = 2;
+      frameMaskCtx.strokeRect(x + 1, y + 1, frameW - 2, frameH - 2);
+    }
+
     function renderLoop(){
-      drawVideoFrameToCanvas(previewCtx, previewCanvas);
+      drawVideoFrameToCanvas(previewCtx, previewCanvas, 'cover');
+      drawFrameMask();
+
+      if (isRecording){
+        // 直接録画なのでここではプレビューだけ更新すればOK
+      }
+
       requestAnimationFrame(renderLoop);
     }
 
@@ -589,18 +690,11 @@
       if (inHardwareRange){
         const ok = await applyHardwareZoom(currentZoom);
         if (ok){
-          hardwareZoomUsed = true;
-          trackZoomValue = currentZoom;
           return;
         }
       }
 
-      if (trackZoomValue !== 1){
-        await applyHardwareZoom(1);
-        trackZoomValue = 1;
-      }
-
-      hardwareZoomUsed = false;
+      await applyHardwareZoom(1);
     }
 
     function toggleSwap(){
@@ -773,17 +867,12 @@
         }
 
         const ok = await applyHardwareZoom(currentZoom);
-        if (ok){
-          hardwareZoomUsed = true;
-          trackZoomValue = currentZoom;
-        }else{
-          hardwareZoomUsed = false;
-          trackZoomValue = 1;
+        if (!ok){
           await applyHardwareZoom(1);
         }
 
-        layoutPreviewCanvas();
-        layoutCaptureCanvas();
+        resizeCanvases();
+        drawFrameMask();
 
         showMessage(facingMode === 'user' ? 'インカメラにしたよ' : '外カメラにしたよ', 1000);
       }catch(err){
@@ -806,6 +895,23 @@
       await startVideoStream(currentFacing);
     }
 
+    function buildRecordingStream(){
+      const stream = new MediaStream();
+
+      if (videoStream){
+        const vTrack = videoStream.getVideoTracks()[0];
+        if (vTrack){
+          stream.addTrack(vTrack);
+        }
+      }
+
+      if (micEnabled && micTrack){
+        stream.addTrack(micTrack);
+      }
+
+      return stream;
+    }
+
     function formatDate(){
       const d = new Date();
       const pad = n => String(n).padStart(2, '0');
@@ -825,8 +931,8 @@
         return;
       }
 
-      layoutCaptureCanvas();
-      drawVideoFrameToCanvas(hiddenCaptureCtx, hiddenCaptureCanvas);
+      resizeCanvases();
+      drawVideoFrameToCanvas(hiddenCaptureCtx, hiddenCaptureCanvas, 'cover');
 
       hiddenCaptureCanvas.toBlob((blob) => {
         if (!blob){
@@ -837,20 +943,6 @@
         addToMemory('photo', blob, filename);
         showMessage('写真をメモリに入れたよ', 1200);
       }, 'image/png');
-    }
-
-    function buildRecordingStream(){
-      const canvasStream = previewCanvas.captureStream(30);
-      const merged = new MediaStream();
-
-      canvasStream.getVideoTracks().forEach(track => merged.addTrack(track));
-
-      if (micTrack){
-        micTrack.enabled = micEnabled;
-        merged.addTrack(micTrack);
-      }
-
-      return merged;
     }
 
     function startRecording(){
@@ -940,16 +1032,16 @@
     function setAspect(aspect){
       selectedAspect = aspect;
       updateSettingButtons();
-      layoutPreviewCanvas();
-      layoutCaptureCanvas();
+      resizeCanvases();
+      drawFrameMask();
       showMessage(`比率を ${aspect} にしたよ`, 900);
     }
 
     function toggleFollowRotation(){
       followDeviceRotation = !followDeviceRotation;
       updateSettingButtons();
-      layoutPreviewCanvas();
-      layoutCaptureCanvas();
+      resizeCanvases();
+      drawFrameMask();
       showMessage(followDeviceRotation ? '縦横切替 ON' : '縦横切替 OFF', 900);
     }
 
@@ -990,22 +1082,20 @@
     }
 
     function applyUiOrientation(){
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      const landscape = w > h;
+      fitShell();
+      resizeCanvases();
+      drawFrameMask();
+    }
 
-      if (landscape){
-        shell.style.width = `${h}px`;
-        shell.style.height = `${w}px`;
-        shell.style.transform = 'rotate(90deg) translateY(-100%)';
-      }else{
-        shell.style.width = `${w}px`;
-        shell.style.height = `${h}px`;
-        shell.style.transform = 'none';
+    function getZoomGestureIntent(dx, dy){
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
+
+      if (ady > adx){
+        return dy < 0 ? 'zoom-in' : 'zoom-out';
       }
 
-      layoutPreviewCanvas();
-      layoutCaptureCanvas();
+      return null;
     }
 
     function getControlsGestureIntent(dx, dy){
@@ -1018,17 +1108,6 @@
 
       if (adx > 42 && adx > ady){
         return 'swap';
-      }
-
-      return null;
-    }
-
-    function getZoomGestureIntent(dx, dy){
-      const adx = Math.abs(dx);
-      const ady = Math.abs(dy);
-
-      if (ady > adx){
-        return dy < 0 ? 'zoom-in' : 'zoom-out';
       }
 
       return null;
@@ -1073,6 +1152,27 @@
       gestureActive = false;
       gestureLocked = false;
     });
+
+    function getNextZoom(direction){
+      const idx = zoomLevels.findIndex(v => Math.abs(v - currentZoom) < 0.001);
+      if (idx !== -1){
+        if (direction === 'up') return zoomLevels[Math.min(zoomLevels.length - 1, idx + 1)];
+        return zoomLevels[Math.max(0, idx - 1)];
+      }
+
+      let nearest = 0;
+      let best = Infinity;
+      for (let i = 0; i < zoomLevels.length; i++){
+        const d = Math.abs(zoomLevels[i] - currentZoom);
+        if (d < best){
+          best = d;
+          nearest = i;
+        }
+      }
+
+      if (direction === 'up') return zoomLevels[Math.min(zoomLevels.length - 1, nearest + 1)];
+      return zoomLevels[Math.max(0, nearest - 1)];
+    }
 
     controls.addEventListener('pointerdown', (e) => {
       if (e.target.closest('button')) return;
@@ -1131,13 +1231,8 @@
     rotateFollowBtn.addEventListener('click', toggleFollowRotation);
     micToggleBtn.addEventListener('click', toggleMic);
 
-    window.addEventListener('resize', () => {
-      applyUiOrientation();
-    });
-
-    window.addEventListener('orientationchange', () => {
-      applyUiOrientation();
-    });
+    window.addEventListener('resize', applyUiOrientation);
+    window.addEventListener('orientationchange', applyUiOrientation);
 
     window.addEventListener('beforeunload', () => {
       if (mediaRecorder && mediaRecorder.state === 'recording'){
@@ -1151,12 +1246,21 @@
       }
     });
 
+    function tryLockPortraitBestEffort(){
+      try{
+        if (screen.orientation && screen.orientation.lock){
+          screen.orientation.lock('portrait').catch(() => {});
+        }
+      }catch(e){}
+    }
+
     updateSettingButtons();
     updateMemoryButton();
     updateZoomLabel();
     applyUiOrientation();
     renderLoop();
     startCamera(currentFacing);
+    tryLockPortraitBestEffort();
   </script>
 </body>
 </html>
