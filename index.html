@@ -15,7 +15,6 @@
       --zoom-dur: 180ms;
       --safe-b: env(safe-area-inset-bottom);
       --safe-t: env(safe-area-inset-top);
-      --shell-bg: #000;
     }
 
     *{
@@ -28,7 +27,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: var(--shell-bg);
+      background: #000;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       user-select: none;
       -webkit-user-select: none;
@@ -43,13 +42,11 @@
 
     #shell{
       position: fixed;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      transform-origin: center center;
+      top: 0;
+      left: 0;
+      transform-origin: top left;
       overflow: hidden;
-      background: var(--shell-bg);
-      border-radius: 0;
+      background: #000;
     }
 
     #app{
@@ -71,19 +68,11 @@
 
     #previewCanvas{
       position: absolute;
-      left: 0;
-      top: 0;
+      inset: 0;
+      width: 100%;
+      height: 100%;
       display: block;
       background: #000;
-      transform-origin: center center;
-      transition: transform var(--zoom-dur) ease;
-    }
-
-    #frameMaskCanvas{
-      position: absolute;
-      inset: 0;
-      z-index: 6;
-      pointer-events: none;
     }
 
     #cameraSource{
@@ -150,8 +139,6 @@
       border-top: 1px solid rgba(255,255,255,.06);
       padding-bottom: var(--safe-b);
       transition: height 240ms ease, background 240ms ease;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
     }
 
     #controls.expanded{
@@ -341,7 +328,6 @@
     <div id="app">
       <div id="viewport">
         <canvas id="previewCanvas"></canvas>
-        <canvas id="frameMaskCanvas"></canvas>
         <video id="cameraSource" autoplay playsinline muted></video>
         <div id="gestureLayer"></div>
 
@@ -387,9 +373,6 @@
     const previewCanvas = document.getElementById('previewCanvas');
     const previewCtx = previewCanvas.getContext('2d', { alpha: false });
 
-    const frameMaskCanvas = document.getElementById('frameMaskCanvas');
-    const frameMaskCtx = frameMaskCanvas.getContext('2d', { alpha: true });
-
     const hiddenCaptureCanvas = document.getElementById('hiddenCaptureCanvas');
     const hiddenCaptureCtx = hiddenCaptureCanvas.getContext('2d', { alpha: false });
 
@@ -414,9 +397,8 @@
       '1:1': 1
     };
 
-    const PREVIEW_MAX_W = 1280;
-    const PREVIEW_MAX_H = 1280;
-    const PHOTO_BASE = 1920;
+    const VIDEO_SHORT_SIDE = 1920;
+    const PHOTO_SHORT_SIDE = 1920;
 
     let selectedAspect = '9:16';
     let followDeviceRotation = true;
@@ -441,6 +423,8 @@
     let hardwareZoomAvailable = false;
     let hardwareZoomMin = 1;
     let hardwareZoomMax = 1;
+    let hardwareZoomUsed = false;
+    let trackZoomValue = 1;
 
     let controlsSwipeActive = false;
     let controlsSwipeLocked = false;
@@ -479,108 +463,49 @@
       return angle;
     }
 
-    function isLandscapeDevice(){
-      const a = getDeviceAngle();
-      return a === 90 || a === 270;
-    }
-
-    function getRotationDeg(){
-      if (!followDeviceRotation) return 0;
-      return getDeviceAngle();
-    }
-
     function getAspectRatioValue(){
       return ASPECTS[selectedAspect] || ASPECTS['9:16'];
     }
 
-    function getEffectiveRatio(){
+    function getCaptureSize(mode = 'video'){
+      const shortSide = mode === 'photo' ? PHOTO_SHORT_SIDE : VIDEO_SHORT_SIDE;
       const ratio = getAspectRatioValue();
-      if (!followDeviceRotation) return ratio;
-      return isLandscapeDevice() ? (1 / ratio) : ratio;
-    }
-
-    function getPreviewCanvasSize(){
-      const ratio = getEffectiveRatio();
-      const vw = viewport.clientWidth || 1;
-      const vh = viewport.clientHeight || 1;
-
-      let w = vw;
-      let h = Math.round(w / ratio);
-
-      if (h > vh){
-        h = vh;
-        w = Math.round(h * ratio);
-      }
-
-      if (w > PREVIEW_MAX_W){
-        const scale = PREVIEW_MAX_W / w;
-        w = Math.round(w * scale);
-        h = Math.round(h * scale);
-      }
-
-      if (h > PREVIEW_MAX_H){
-        const scale = PREVIEW_MAX_H / h;
-        w = Math.round(w * scale);
-        h = Math.round(h * scale);
-      }
-
-      return { width: Math.max(1, w), height: Math.max(1, h) };
-    }
-
-    function getPhotoCanvasSize(){
-      const ratio = getEffectiveRatio();
-      const base = PHOTO_BASE;
-      let width = base;
-      let height = Math.round(width / ratio);
-
-      if (height > base * 2){
-        height = base * 2;
-        width = Math.round(height * ratio);
-      }
 
       return {
-        width: Math.max(1, width),
-        height: Math.max(1, height)
+        width: Math.round(shortSide * ratio),
+        height: shortSide
       };
     }
 
-    function fitShell(){
-      const vw = window.innerWidth || 1;
-      const vh = window.innerHeight || 1;
+    function resizeCanvases(){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
 
-      let shellW = Math.min(vw, Math.round(vh * 9 / 16));
-      let shellH = Math.round(shellW * 16 / 9);
+      const previewW = Math.max(1, Math.round(viewport.clientWidth * dpr));
+      const previewH = Math.max(1, Math.round(viewport.clientHeight * dpr));
 
-      if (shellH > vh){
-        shellH = vh;
-        shellW = Math.round(shellH * 9 / 16);
+      if (previewCanvas.width !== previewW || previewCanvas.height !== previewH){
+        previewCanvas.width = previewW;
+        previewCanvas.height = previewH;
       }
 
-      shell.style.width = `${shellW}px`;
-      shell.style.height = `${shellH}px`;
+      const videoSize = getCaptureSize('video');
+      const photoSize = getCaptureSize('photo');
+
+      if (hiddenCaptureCanvas.width !== videoSize.width || hiddenCaptureCanvas.height !== videoSize.height){
+        hiddenCaptureCanvas.width = videoSize.width;
+        hiddenCaptureCanvas.height = videoSize.height;
+      }
+
+      // 写真も同じ比率・同じ基準で使う
+      hiddenCaptureCanvas.dataset.photoWidth = String(photoSize.width);
+      hiddenCaptureCanvas.dataset.photoHeight = String(photoSize.height);
     }
 
-    function resizeCanvases(){
-      const p = getPreviewCanvasSize();
-      if (previewCanvas.width !== p.width) previewCanvas.width = p.width;
-      if (previewCanvas.height !== p.height) previewCanvas.height = p.height;
-
-      previewCanvas.style.width = `${p.width}px`;
-      previewCanvas.style.height = `${p.height}px`;
-      previewCanvas.style.left = `${Math.round((viewport.clientWidth - p.width) / 2)}px`;
-      previewCanvas.style.top = `${Math.round((viewport.clientHeight - p.height) / 2)}px`;
-
-      frameMaskCanvas.width = viewport.clientWidth || 1;
-      frameMaskCanvas.height = viewport.clientHeight || 1;
-      frameMaskCanvas.style.width = `${viewport.clientWidth}px`;
-      frameMaskCanvas.style.height = `${viewport.clientHeight}px`;
-
-      const ph = getPhotoCanvasSize();
-      hiddenCaptureCanvas.width = ph.width;
-      hiddenCaptureCanvas.height = ph.height;
+    function getRenderZoom(){
+      return hardwareZoomUsed ? 1 : currentZoom;
     }
 
-    function drawVideoFrameToCanvas(ctx, canvas, fitMode = 'cover'){
+    function drawFrameToCanvas(ctx, canvas, rotateForMedia){
       const cw = canvas.width;
       const ch = canvas.height;
 
@@ -591,70 +516,43 @@
         return;
       }
 
-      const rotationDeg = getRotationDeg();
-      const rot = rotationDeg * Math.PI / 180;
+      const rotationDeg = rotateForMedia && followDeviceRotation ? getDeviceAngle() : 0;
+      const rad = rotationDeg * Math.PI / 180;
       const quarterTurn = rotationDeg === 90 || rotationDeg === 270;
 
-      const sourceW = cameraSource.videoWidth;
-      const sourceH = cameraSource.videoHeight;
-      const effectiveW = quarterTurn ? sourceH : sourceW;
-      const effectiveH = quarterTurn ? sourceW : sourceH;
+      const srcW = cameraSource.videoWidth;
+      const srcH = cameraSource.videoHeight;
+      const effectiveW = quarterTurn ? srcH : srcW;
+      const effectiveH = quarterTurn ? srcW : srcH;
 
-      const zoom = hardwareZoomAvailable ? 1 : currentZoom;
+      const zoom = getRenderZoom();
 
-      const baseScale = fitMode === 'contain'
-        ? Math.min(cw / effectiveW, ch / effectiveH)
-        : Math.max(cw / effectiveW, ch / effectiveH);
+      const baseScale = zoom >= 1
+        ? Math.max(cw / effectiveW, ch / effectiveH)
+        : Math.min(cw / effectiveW, ch / effectiveH);
 
       const scale = baseScale * zoom;
-      const drawW = sourceW * scale;
-      const drawH = sourceH * scale;
+      const drawW = srcW * scale;
+      const drawH = srcH * scale;
 
       ctx.save();
       ctx.translate(cw / 2, ch / 2);
-      ctx.rotate(rot);
+      ctx.rotate(rad);
       ctx.drawImage(cameraSource, -drawW / 2, -drawH / 2, drawW, drawH);
       ctx.restore();
     }
 
-    function drawFrameMask(){
-      const cw = frameMaskCanvas.width;
-      const ch = frameMaskCanvas.height;
+    function drawPreview(){
+      drawFrameToCanvas(previewCtx, previewCanvas, false);
+    }
 
-      frameMaskCtx.clearRect(0, 0, cw, ch);
-
-      const ratio = getEffectiveRatio();
-      const viewRatio = cw / ch;
-
-      let frameW, frameH;
-      if (viewRatio > ratio){
-        frameH = ch;
-        frameW = Math.round(ch * ratio);
-      }else{
-        frameW = cw;
-        frameH = Math.round(cw / ratio);
-      }
-
-      const x = Math.round((cw - frameW) / 2);
-      const y = Math.round((ch - frameH) / 2);
-
-      frameMaskCtx.fillStyle = 'rgba(0,0,0,0.34)';
-      frameMaskCtx.fillRect(0, 0, cw, ch);
-      frameMaskCtx.clearRect(x, y, frameW, frameH);
-
-      frameMaskCtx.strokeStyle = 'rgba(255,255,255,0.22)';
-      frameMaskCtx.lineWidth = 2;
-      frameMaskCtx.strokeRect(x + 1, y + 1, frameW - 2, frameH - 2);
+    function drawCaptureFrame(){
+      drawFrameToCanvas(hiddenCaptureCtx, hiddenCaptureCanvas, true);
     }
 
     function renderLoop(){
-      drawVideoFrameToCanvas(previewCtx, previewCanvas, 'cover');
-      drawFrameMask();
-
-      if (isRecording){
-        // 直接録画なのでここではプレビューだけ更新すればOK
-      }
-
+      drawPreview();
+      drawCaptureFrame();
       requestAnimationFrame(renderLoop);
     }
 
@@ -690,11 +588,18 @@
       if (inHardwareRange){
         const ok = await applyHardwareZoom(currentZoom);
         if (ok){
+          hardwareZoomUsed = true;
+          trackZoomValue = currentZoom;
           return;
         }
       }
 
-      await applyHardwareZoom(1);
+      if (trackZoomValue !== 1){
+        await applyHardwareZoom(1);
+        trackZoomValue = 1;
+      }
+
+      hardwareZoomUsed = false;
     }
 
     function toggleSwap(){
@@ -812,6 +717,7 @@
           },
           video: false
         });
+
         micTrack = micStream.getAudioTracks()[0] || null;
         if (micTrack){
           micTrack.enabled = micEnabled;
@@ -867,13 +773,16 @@
         }
 
         const ok = await applyHardwareZoom(currentZoom);
-        if (!ok){
+        if (ok){
+          hardwareZoomUsed = true;
+          trackZoomValue = currentZoom;
+        }else{
+          hardwareZoomUsed = false;
+          trackZoomValue = 1;
           await applyHardwareZoom(1);
         }
 
         resizeCanvases();
-        drawFrameMask();
-
         showMessage(facingMode === 'user' ? 'インカメラにしたよ' : '外カメラにしたよ', 1000);
       }catch(err){
         console.error(err);
@@ -895,34 +804,13 @@
       await startVideoStream(currentFacing);
     }
 
-    function buildRecordingStream(){
-      const stream = new MediaStream();
-
-      if (videoStream){
-        const vTrack = videoStream.getVideoTracks()[0];
-        if (vTrack){
-          stream.addTrack(vTrack);
-        }
-      }
-
-      if (micEnabled && micTrack){
-        stream.addTrack(micTrack);
-      }
-
-      return stream;
-    }
-
-    function formatDate(){
-      const d = new Date();
-      const pad = n => String(n).padStart(2, '0');
-      return (
-        d.getFullYear() +
-        pad(d.getMonth() + 1) +
-        pad(d.getDate()) + '_' +
-        pad(d.getHours()) +
-        pad(d.getMinutes()) +
-        pad(d.getSeconds())
-      );
+    function getPhotoSize(){
+      const shortSide = PHOTO_SHORT_SIDE;
+      const ratio = getAspectRatioValue();
+      return {
+        width: Math.round(shortSide * ratio),
+        height: shortSide
+      };
     }
 
     function capturePhoto(){
@@ -931,8 +819,13 @@
         return;
       }
 
-      resizeCanvases();
-      drawVideoFrameToCanvas(hiddenCaptureCtx, hiddenCaptureCanvas, 'cover');
+      const photoSize = getPhotoSize();
+      if (hiddenCaptureCanvas.width !== photoSize.width || hiddenCaptureCanvas.height !== photoSize.height){
+        hiddenCaptureCanvas.width = photoSize.width;
+        hiddenCaptureCanvas.height = photoSize.height;
+      }
+
+      drawFrameToCanvas(hiddenCaptureCtx, hiddenCaptureCanvas, true);
 
       hiddenCaptureCanvas.toBlob((blob) => {
         if (!blob){
@@ -945,7 +838,21 @@
       }, 'image/png');
     }
 
-    function startRecording(){
+    function buildRecordingStream(){
+      const canvasStream = hiddenCaptureCanvas.captureStream(30);
+      const merged = new MediaStream();
+
+      canvasStream.getVideoTracks().forEach(track => merged.addTrack(track));
+
+      if (micEnabled && micTrack){
+        micTrack.enabled = true;
+        merged.addTrack(micTrack);
+      }
+
+      return merged;
+    }
+
+    async function startRecording(){
       if (!videoStream){
         showMessage('カメラの準備がまだだよ');
         return;
@@ -955,6 +862,10 @@
         return;
       }
       if (isRecording) return;
+
+      if (micEnabled && !micTrack){
+        await ensureMicStream();
+      }
 
       const format = pickRecorderFormat();
       let recorderStream = null;
@@ -1033,7 +944,6 @@
       selectedAspect = aspect;
       updateSettingButtons();
       resizeCanvases();
-      drawFrameMask();
       showMessage(`比率を ${aspect} にしたよ`, 900);
     }
 
@@ -1041,7 +951,6 @@
       followDeviceRotation = !followDeviceRotation;
       updateSettingButtons();
       resizeCanvases();
-      drawFrameMask();
       showMessage(followDeviceRotation ? '縦横切替 ON' : '縦横切替 OFF', 900);
     }
 
@@ -1082,20 +991,21 @@
     }
 
     function applyUiOrientation(){
-      fitShell();
-      resizeCanvases();
-      drawFrameMask();
-    }
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const landscape = w > h;
 
-    function getZoomGestureIntent(dx, dy){
-      const adx = Math.abs(dx);
-      const ady = Math.abs(dy);
-
-      if (ady > adx){
-        return dy < 0 ? 'zoom-in' : 'zoom-out';
+      if (landscape){
+        shell.style.width = `${h}px`;
+        shell.style.height = `${w}px`;
+        shell.style.transform = 'rotate(90deg) translateY(-100%)';
+      }else{
+        shell.style.width = `${w}px`;
+        shell.style.height = `${h}px`;
+        shell.style.transform = 'none';
       }
 
-      return null;
+      resizeCanvases();
     }
 
     function getControlsGestureIntent(dx, dy){
@@ -1108,6 +1018,17 @@
 
       if (adx > 42 && adx > ady){
         return 'swap';
+      }
+
+      return null;
+    }
+
+    function getZoomGestureIntent(dx, dy){
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
+
+      if (ady > adx){
+        return dy < 0 ? 'zoom-in' : 'zoom-out';
       }
 
       return null;
@@ -1135,11 +1056,9 @@
       gestureLocked = true;
 
       if (intent === 'zoom-in'){
-        const nextZoom = getNextZoom('up');
-        await setZoom(nextZoom);
+        await setZoom(getNextZoom('up'));
       }else if (intent === 'zoom-out'){
-        const nextZoom = getNextZoom('down');
-        await setZoom(nextZoom);
+        await setZoom(getNextZoom('down'));
       }
     });
 
@@ -1246,21 +1165,12 @@
       }
     });
 
-    function tryLockPortraitBestEffort(){
-      try{
-        if (screen.orientation && screen.orientation.lock){
-          screen.orientation.lock('portrait').catch(() => {});
-        }
-      }catch(e){}
-    }
-
     updateSettingButtons();
     updateMemoryButton();
     updateZoomLabel();
     applyUiOrientation();
     renderLoop();
     startCamera(currentFacing);
-    tryLockPortraitBestEffort();
   </script>
 </body>
 </html>
