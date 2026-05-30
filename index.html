@@ -12,7 +12,6 @@
       --small-btn: 46px;
       --side: 18px;
       --swap-dur: 360ms;
-      --zoom-dur: 180ms;
       --safe-b: env(safe-area-inset-bottom);
       --safe-t: env(safe-area-inset-top);
     }
@@ -469,8 +468,6 @@
         angle = screen.orientation.angle;
       }else if (typeof window.orientation === 'number'){
         angle = window.orientation;
-      }else if (window.matchMedia && window.matchMedia('(orientation: landscape)').matches){
-        angle = 90;
       }
       angle = ((angle % 360) + 360) % 360;
       return angle;
@@ -483,7 +480,7 @@
 
     function getRotationDeg(){
       if (!followDeviceRotation) return 0;
-      return isLandscapeDevice() ? 0 : 90;
+      return getDeviceAngle();
     }
 
     function getAspectRatioValue(){
@@ -497,6 +494,18 @@
         return { width: h, height: w, landscape: true };
       }
       return { width: w, height: h, landscape: false };
+    }
+
+    function updateControlsTheme(){
+      let bg;
+      if (selectedAspect === '9:16'){
+        bg = panelExpanded ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.34)';
+      }else if (selectedAspect === '3:4'){
+        bg = panelExpanded ? 'rgba(0,0,0,.42)' : 'rgba(0,0,0,.88)';
+      }else{
+        bg = panelExpanded ? 'rgba(0,0,0,.96)' : 'rgba(0,0,0,.90)';
+      }
+      controls.style.background = bg;
     }
 
     function applyUiOrientation(){
@@ -515,62 +524,39 @@
       resizeCanvases();
     }
 
-    function updateControlsTheme(){
-      let bg;
-      if (selectedAspect === '9:16'){
-        bg = panelExpanded ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.34)';
-      }else if (selectedAspect === '3:4'){
-        bg = panelExpanded ? 'rgba(0,0,0,.42)' : 'rgba(0,0,0,.88)';
-      }else{
-        bg = panelExpanded ? 'rgba(0,0,0,.96)' : 'rgba(0,0,0,.92)';
-      }
-      controls.style.background = bg;
-    }
-
     function resizePreviewCanvas(){
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      const w = Math.max(1, Math.floor(viewport.clientWidth * dpr));
-      const h = Math.max(1, Math.floor(viewport.clientHeight * dpr));
-      previewCanvas.width = w;
-      previewCanvas.height = h;
-    }
-
-    function getControlsHeight(){
-      return controls.getBoundingClientRect().height || 0;
+      previewCanvas.width = Math.max(1, Math.floor(viewport.clientWidth * dpr));
+      previewCanvas.height = Math.max(1, Math.floor(viewport.clientHeight * dpr));
     }
 
     function getPreviewContentRect(cw, ch){
-      const controlsH = getControlsHeight();
-
       if (selectedAspect === '9:16'){
         return { x: 0, y: 0, w: cw, h: ch };
       }
 
       if (selectedAspect === '3:4'){
         const desiredH = Math.round(cw / getAspectRatioValue());
-        const maxH = Math.max(1, ch - controlsH);
-        return { x: 0, y: 0, w: cw, h: Math.max(1, Math.min(desiredH, maxH)) };
+        return { x: 0, y: 0, w: cw, h: Math.max(1, Math.min(ch, desiredH)) };
       }
 
-      const side = Math.min(cw, Math.max(1, ch - controlsH));
+      const s = Math.min(cw, ch);
       return {
-        x: Math.floor((cw - side) / 2),
-        y: 0,
-        w: side,
-        h: side
+        x: Math.floor((cw - s) / 2),
+        y: Math.floor((ch - s) / 2),
+        w: s,
+        h: s
       };
     }
 
     function getPhotoOutputSize(){
       const ratio = getAspectRatioValue();
-
       if (followDeviceRotation && isLandscapeDevice()){
         return {
           width: PHOTO_BASE,
           height: Math.max(1, Math.round(PHOTO_BASE * ratio))
         };
       }
-
       return {
         width: Math.max(1, Math.round(PHOTO_BASE * ratio)),
         height: PHOTO_BASE
@@ -578,7 +564,7 @@
     }
 
     function getRecordOutputSize(){
-      if (followDeviceRotation || selectedAspect === '1:1'){
+      if (selectedAspect === '1:1'){
         return {
           width: VIDEO_BASE,
           height: VIDEO_BASE
@@ -586,6 +572,14 @@
       }
 
       const ratio = getAspectRatioValue();
+
+      if (followDeviceRotation && isLandscapeDevice()){
+        return {
+          width: VIDEO_BASE,
+          height: Math.max(1, Math.round(VIDEO_BASE * ratio))
+        };
+      }
+
       return {
         width: Math.max(1, Math.round(VIDEO_BASE * ratio)),
         height: VIDEO_BASE
@@ -610,7 +604,7 @@
       resizeRecordCanvas();
     }
 
-    function drawVideoIntoRect(ctx, canvas, rect, zoomValue){
+    function drawVideoIntoRect(ctx, canvas, rect, fitMode, zoomValue){
       const srcW = cameraSource.videoWidth;
       const srcH = cameraSource.videoHeight;
       if (!srcW || !srcH) return;
@@ -623,7 +617,14 @@
       const effectiveH = quarterTurn ? srcW : srcH;
       const zoom = Math.max(0.01, zoomValue || 1);
 
-      const scale = Math.max(rect.w / effectiveW, rect.h / effectiveH) * zoom;
+      let scale;
+      if (fitMode === 'contain'){
+        scale = Math.min(rect.w / effectiveW, rect.h / effectiveH);
+      }else{
+        scale = Math.max(rect.w / effectiveW, rect.h / effectiveH);
+      }
+      scale *= zoom;
+
       const drawW = srcW * scale;
       const drawH = srcH * scale;
 
@@ -646,11 +647,24 @@
       }
 
       const zoomValue = hardwareZoomUsed ? 1 : currentZoom;
-      const rect = mode === 'preview'
-        ? getPreviewContentRect(cw, ch)
-        : { x: 0, y: 0, w: cw, h: ch };
 
-      drawVideoIntoRect(ctx, canvas, rect, zoomValue);
+      if (mode === 'preview'){
+        const rect = getPreviewContentRect(cw, ch);
+        drawVideoIntoRect(ctx, canvas, rect, 'cover', zoomValue);
+        return;
+      }
+
+      if (mode === 'photo'){
+        drawVideoIntoRect(ctx, canvas, { x: 0, y: 0, w: cw, h: ch }, 'cover', zoomValue);
+        return;
+      }
+
+      if (mode === 'record' && selectedAspect === '1:1'){
+        drawVideoIntoRect(ctx, canvas, { x: 0, y: 0, w: cw, h: ch }, 'contain', zoomValue);
+        return;
+      }
+
+      drawVideoIntoRect(ctx, canvas, { x: 0, y: 0, w: cw, h: ch }, 'cover', zoomValue);
     }
 
     function renderLoop(){
@@ -732,7 +746,6 @@
       panelExpanded = expanded;
       controls.classList.toggle('expanded', expanded);
       updateControlsTheme();
-      resizeCanvases();
     }
 
     function updateMemoryButton(){
@@ -1059,12 +1072,12 @@
     function setAspect(aspect){
       selectedAspect = aspect;
       updateSettingButtons();
-      updateControlsTheme();
 
       if (selectedAspect === '1:1'){
         setPanelExpanded(true);
       }
 
+      updateControlsTheme();
       resizeCanvases();
       showMessage(`比率を ${aspect} にしたよ`, 900);
     }
@@ -1110,6 +1123,10 @@
 
       micToggleBtn.textContent = micEnabled ? 'マイク ON' : 'マイク OFF';
       micToggleBtn.classList.toggle('active', micEnabled);
+
+      if (selectedAspect === '1:1'){
+        setPanelExpanded(true);
+      }
     }
 
     function getControlsGestureIntent(dx, dy){
@@ -1189,6 +1206,7 @@
 
     controls.addEventListener('pointermove', (e) => {
       if (!controlsSwipeActive || controlsSwipeLocked) return;
+      if (selectedAspect === '1:1') return;
 
       const dx = e.clientX - swipeStartX;
       const dy = e.clientY - swipeStartY;
@@ -1203,9 +1221,7 @@
       if (intent === 'panel-open'){
         setPanelExpanded(true);
       }else if (intent === 'panel-close'){
-        if (selectedAspect !== '1:1'){
-          setPanelExpanded(false);
-        }
+        setPanelExpanded(false);
       }else if (intent === 'swap'){
         toggleSwap();
       }
