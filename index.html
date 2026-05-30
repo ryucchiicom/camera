@@ -276,7 +276,6 @@
 
   <script>
     const video = document.getElementById('camera');
-    const viewport = document.getElementById('viewport');
     const gestureLayer = document.getElementById('gestureLayer');
     const controls = document.getElementById('controls');
     const videoBtn = document.getElementById('videoBtn');
@@ -562,7 +561,9 @@
 
       const format = pickRecorderFormat();
       try{
-        mediaRecorder = format.mimeType ? new MediaRecorder(stream, { mimeType: format.mimeType }) : new MediaRecorder(stream);
+        mediaRecorder = format.mimeType
+          ? new MediaRecorder(stream, { mimeType: format.mimeType })
+          : new MediaRecorder(stream);
       }catch(err){
         console.error(err);
         showMessage('動画録画を開始できなかった');
@@ -579,6 +580,7 @@
       mediaRecorder.onstop = () => {
         const type = mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : (format.mimeType || 'video/webm');
         const blob = new Blob(recordedChunks, { type });
+
         if (blob.size > 0){
           const ext = format.ext || (type.includes('mp4') ? 'mp4' : 'webm');
           const filename = `video_${formatDate()}.${ext}`;
@@ -639,7 +641,11 @@
             width: { ideal: 1920 },
             height: { ideal: 1080 }
           },
-          audio: false
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
         });
 
         video.srcObject = stream;
