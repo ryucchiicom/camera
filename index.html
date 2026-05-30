@@ -71,7 +71,7 @@
       z-index: 10;
       display: flex;
       align-items: flex-start;
-      justify-content: space-between;
+      justify-content: flex-end;
       gap: 8px;
       pointer-events: none;
     }
@@ -252,7 +252,6 @@
       <div id="gestureLayer"></div>
 
       <div id="topHud">
-        <div></div>
         <div class="pill pillButton" id="memorySaveBtn">メモリ保存 0</div>
       </div>
 
@@ -329,13 +328,18 @@
       return Number.isInteger(z) ? String(z) : z.toFixed(1).replace(/\.0$/, '');
     }
 
-    function updateZoomVisual(){
+    function updateZoomLabel(){
       zoomPill.textContent = `x${formatZoom(currentZoom)}`;
       flashZoom();
+    }
+
+    function updateZoomVisual(){
+      updateZoomLabel();
+
       if (!hardwareZoomAvailable || currentZoom < hardwareZoomMin || currentZoom > hardwareZoomMax){
         video.style.transform = `scale(${currentZoom})`;
       }else{
-        video.style.transform = `none`;
+        video.style.transform = 'none';
       }
     }
 
@@ -382,11 +386,9 @@
 
       const ok = await applyHardwareZoom(currentZoom);
       if (!ok){
-        // iPhone側でズーム制御が効かない場合だけ、見た目ズームにフォールバック
         video.style.transform = `scale(${currentZoom})`;
       }else{
-        // ハードウェアズームが効くならCSS拡大は外す
-        video.style.transform = `none`;
+        video.style.transform = 'none';
       }
     }
 
@@ -421,21 +423,26 @@
       updateMemoryButton();
     }
 
-    function getBestMimeType(){
-      if (!window.MediaRecorder) return '';
+    function pickRecorderFormat(){
+      if (!window.MediaRecorder) return { mimeType: '', ext: 'webm' };
+
       const candidates = [
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
-        'video/webm;codecs=vp9',
-        'video/webm;codecs=vp8',
-        'video/webm'
+        { mimeType: 'video/mp4', ext: 'mp4' },
+        { mimeType: 'video/mp4;codecs=h264,aac', ext: 'mp4' },
+        { mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm' },
+        { mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm' },
+        { mimeType: 'video/webm;codecs=vp9', ext: 'webm' },
+        { mimeType: 'video/webm;codecs=vp8', ext: 'webm' },
+        { mimeType: 'video/webm', ext: 'webm' }
       ];
-      for (const type of candidates){
+
+      for (const item of candidates){
         try{
-          if (MediaRecorder.isTypeSupported(type)) return type;
+          if (MediaRecorder.isTypeSupported(item.mimeType)) return item;
         }catch(e){}
       }
-      return '';
+
+      return { mimeType: '', ext: 'webm' };
     }
 
     function downloadBlob(blob, filename){
@@ -553,9 +560,9 @@
       }
       if (isRecording) return;
 
-      const mimeType = getBestMimeType();
+      const format = pickRecorderFormat();
       try{
-        mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        mediaRecorder = format.mimeType ? new MediaRecorder(stream, { mimeType: format.mimeType }) : new MediaRecorder(stream);
       }catch(err){
         console.error(err);
         showMessage('動画録画を開始できなかった');
@@ -570,10 +577,10 @@
       };
 
       mediaRecorder.onstop = () => {
-        const type = mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : 'video/webm';
+        const type = mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : (format.mimeType || 'video/webm');
         const blob = new Blob(recordedChunks, { type });
         if (blob.size > 0){
-          const ext = type.includes('mp4') ? 'mp4' : 'webm';
+          const ext = format.ext || (type.includes('mp4') ? 'mp4' : 'webm');
           const filename = `video_${formatDate()}.${ext}`;
           addToMemory('video', blob, filename);
           showMessage('動画をメモリに入れたよ', 1200);
@@ -655,18 +662,13 @@
           }
         }
 
-        // 0.5x が使えるなら、実機ズームを優先して有効化
-        if (hardwareZoomAvailable && currentZoom === 0.5 && hardwareZoomMin <= 0.5){
-          await applyHardwareZoom(0.5);
-          video.style.transform = 'none';
+        updateZoomVisual();
+
+        const ok = await applyHardwareZoom(currentZoom);
+        if (!ok){
+          video.style.transform = `scale(${currentZoom})`;
         }else{
-          updateZoomVisual();
-          const ok = await applyHardwareZoom(currentZoom);
-          if (!ok){
-            video.style.transform = `scale(${currentZoom})`;
-          }else{
-            video.style.transform = 'none';
-          }
+          video.style.transform = 'none';
         }
 
         showMessage(facingMode === 'user' ? 'インカメラにしたよ' : '外カメラにしたよ', 1000);
@@ -769,7 +771,7 @@
     });
 
     updateMemoryButton();
-    zoomPill.textContent = 'x1';
+    updateZoomLabel();
     startCamera(currentFacing);
   </script>
 </body>
