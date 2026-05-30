@@ -374,7 +374,6 @@
 
   <script>
     const shell = document.getElementById('shell');
-    const app = document.getElementById('app');
     const viewport = document.getElementById('viewport');
 
     const cameraSource = document.getElementById('cameraSource');
@@ -410,7 +409,6 @@
 
     const PHOTO_BASE = 1920;
     const VIDEO_BASE = 1440;
-    const VIDEO_SQUARE = 1440;
 
     let selectedAspect = '9:16';
     let followDeviceRotation = true;
@@ -518,11 +516,11 @@
     function updateControlsTheme(){
       let bg;
       if (selectedAspect === '9:16'){
-        bg = panelExpanded ? 'rgba(0,0,0,.68)' : 'rgba(0,0,0,.38)';
+        bg = panelExpanded ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.34)';
       }else if (selectedAspect === '3:4'){
-        bg = panelExpanded ? 'rgba(0,0,0,.92)' : 'rgba(0,0,0,.84)';
+        bg = panelExpanded ? 'rgba(0,0,0,.42)' : 'rgba(0,0,0,.88)';
       }else{
-        bg = panelExpanded ? 'rgba(0,0,0,.98)' : 'rgba(0,0,0,.94)';
+        bg = panelExpanded ? 'rgba(0,0,0,.96)' : 'rgba(0,0,0,.90)';
       }
       controls.style.background = bg;
     }
@@ -531,26 +529,8 @@
       const dpr = Math.max(1, window.devicePixelRatio || 1);
       const w = Math.max(1, Math.floor(viewport.clientWidth * dpr));
       const h = Math.max(1, Math.floor(viewport.clientHeight * dpr));
-      if (previewCanvas.width !== w) previewCanvas.width = w;
-      if (previewCanvas.height !== h) previewCanvas.height = h;
-    }
-
-    function resizePhotoCanvas(){
-      const { width, height } = getPhotoOutputSize();
-      if (hiddenCaptureCanvas.width !== width) hiddenCaptureCanvas.width = width;
-      if (hiddenCaptureCanvas.height !== height) hiddenCaptureCanvas.height = height;
-    }
-
-    function resizeRecordCanvas(){
-      const { width, height } = getRecordOutputSize();
-      if (recordCanvas.width !== width) recordCanvas.width = width;
-      if (recordCanvas.height !== height) recordCanvas.height = height;
-    }
-
-    function resizeCanvases(){
-      resizePreviewCanvas();
-      resizePhotoCanvas();
-      resizeRecordCanvas();
+      previewCanvas.width = w;
+      previewCanvas.height = h;
     }
 
     function getPreviewContentRect(cw, ch){
@@ -559,8 +539,8 @@
       }
 
       if (selectedAspect === '3:4'){
-        const h = Math.min(ch, Math.round(cw / getAspectRatioValue()));
-        return { x: 0, y: 0, w: cw, h: Math.max(1, h) };
+        const desiredH = Math.round(cw / getAspectRatioValue());
+        return { x: 0, y: 0, w: cw, h: Math.max(1, Math.min(ch, desiredH)) };
       }
 
       const s = Math.min(cw, ch);
@@ -574,12 +554,14 @@
 
     function getPhotoOutputSize(){
       const ratio = getAspectRatioValue();
+
       if (followDeviceRotation && isLandscapeDevice()){
         return {
           width: PHOTO_BASE,
           height: Math.max(1, Math.round(PHOTO_BASE * ratio))
         };
       }
+
       return {
         width: Math.max(1, Math.round(PHOTO_BASE * ratio)),
         height: PHOTO_BASE
@@ -589,8 +571,8 @@
     function getRecordOutputSize(){
       if (followDeviceRotation){
         return {
-          width: VIDEO_SQUARE,
-          height: VIDEO_SQUARE
+          width: VIDEO_BASE,
+          height: VIDEO_BASE
         };
       }
 
@@ -599,6 +581,24 @@
         width: Math.max(1, Math.round(VIDEO_BASE * ratio)),
         height: VIDEO_BASE
       };
+    }
+
+    function resizePhotoCanvas(){
+      const { width, height } = getPhotoOutputSize();
+      hiddenCaptureCanvas.width = width;
+      hiddenCaptureCanvas.height = height;
+    }
+
+    function resizeRecordCanvas(){
+      const { width, height } = getRecordOutputSize();
+      recordCanvas.width = width;
+      recordCanvas.height = height;
+    }
+
+    function resizeCanvases(){
+      resizePreviewCanvas();
+      resizePhotoCanvas();
+      resizeRecordCanvas();
     }
 
     function drawVideoIntoRect(ctx, canvas, rect, zoomValue){
@@ -637,13 +637,9 @@
       }
 
       const zoomValue = hardwareZoomUsed ? 1 : currentZoom;
-      let rect;
-
-      if (mode === 'preview'){
-        rect = getPreviewContentRect(cw, ch);
-      }else{
-        rect = { x: 0, y: 0, w: cw, h: ch };
-      }
+      const rect = mode === 'preview'
+        ? getPreviewContentRect(cw, ch)
+        : { x: 0, y: 0, w: cw, h: ch };
 
       drawVideoIntoRect(ctx, canvas, rect, zoomValue);
     }
@@ -1221,13 +1217,16 @@
     rotateFollowBtn.addEventListener('click', toggleFollowRotation);
     micToggleBtn.addEventListener('click', toggleMic);
 
-    window.addEventListener('resize', () => {
-      applyUiOrientation();
-    });
+    function tryLockPortraitBestEffort(){
+      try{
+        if (screen.orientation && screen.orientation.lock){
+          screen.orientation.lock('portrait').catch(() => {});
+        }
+      }catch(e){}
+    }
 
-    window.addEventListener('orientationchange', () => {
-      applyUiOrientation();
-    });
+    window.addEventListener('resize', applyUiOrientation);
+    window.addEventListener('orientationchange', applyUiOrientation);
 
     window.addEventListener('beforeunload', () => {
       if (mediaRecorder && mediaRecorder.state === 'recording'){
@@ -1240,15 +1239,6 @@
         micStream.getTracks().forEach(t => t.stop());
       }
     });
-
-    async function tryLockPortraitBestEffort(){
-      try{
-        if (screen.orientation && screen.orientation.lock){
-          await screen.orientation.lock('portrait');
-        }
-      }catch(err){
-      }
-    }
 
     updateSettingButtons();
     updateMemoryButton();
