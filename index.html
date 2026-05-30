@@ -469,6 +469,8 @@
         angle = screen.orientation.angle;
       }else if (typeof window.orientation === 'number'){
         angle = window.orientation;
+      }else if (window.matchMedia && window.matchMedia('(orientation: landscape)').matches){
+        angle = 90;
       }
       angle = ((angle % 360) + 360) % 360;
       return angle;
@@ -481,7 +483,7 @@
 
     function getRotationDeg(){
       if (!followDeviceRotation) return 0;
-      return getDeviceAngle();
+      return isLandscapeDevice() ? 0 : 90;
     }
 
     function getAspectRatioValue(){
@@ -520,7 +522,7 @@
       }else if (selectedAspect === '3:4'){
         bg = panelExpanded ? 'rgba(0,0,0,.42)' : 'rgba(0,0,0,.88)';
       }else{
-        bg = panelExpanded ? 'rgba(0,0,0,.96)' : 'rgba(0,0,0,.90)';
+        bg = panelExpanded ? 'rgba(0,0,0,.96)' : 'rgba(0,0,0,.92)';
       }
       controls.style.background = bg;
     }
@@ -533,22 +535,29 @@
       previewCanvas.height = h;
     }
 
+    function getControlsHeight(){
+      return controls.getBoundingClientRect().height || 0;
+    }
+
     function getPreviewContentRect(cw, ch){
+      const controlsH = getControlsHeight();
+
       if (selectedAspect === '9:16'){
         return { x: 0, y: 0, w: cw, h: ch };
       }
 
       if (selectedAspect === '3:4'){
         const desiredH = Math.round(cw / getAspectRatioValue());
-        return { x: 0, y: 0, w: cw, h: Math.max(1, Math.min(ch, desiredH)) };
+        const maxH = Math.max(1, ch - controlsH);
+        return { x: 0, y: 0, w: cw, h: Math.max(1, Math.min(desiredH, maxH)) };
       }
 
-      const s = Math.min(cw, ch);
+      const side = Math.min(cw, Math.max(1, ch - controlsH));
       return {
-        x: Math.floor((cw - s) / 2),
-        y: Math.floor((ch - s) / 2),
-        w: s,
-        h: s
+        x: Math.floor((cw - side) / 2),
+        y: 0,
+        w: side,
+        h: side
       };
     }
 
@@ -569,7 +578,7 @@
     }
 
     function getRecordOutputSize(){
-      if (followDeviceRotation){
+      if (followDeviceRotation || selectedAspect === '1:1'){
         return {
           width: VIDEO_BASE,
           height: VIDEO_BASE
@@ -717,9 +726,13 @@
     toggleSwap.state = false;
 
     function setPanelExpanded(expanded){
+      if (selectedAspect === '1:1'){
+        expanded = true;
+      }
       panelExpanded = expanded;
       controls.classList.toggle('expanded', expanded);
       updateControlsTheme();
+      resizeCanvases();
     }
 
     function updateMemoryButton(){
@@ -1047,6 +1060,11 @@
       selectedAspect = aspect;
       updateSettingButtons();
       updateControlsTheme();
+
+      if (selectedAspect === '1:1'){
+        setPanelExpanded(true);
+      }
+
       resizeCanvases();
       showMessage(`比率を ${aspect} にしたよ`, 900);
     }
@@ -1185,7 +1203,9 @@
       if (intent === 'panel-open'){
         setPanelExpanded(true);
       }else if (intent === 'panel-close'){
-        setPanelExpanded(false);
+        if (selectedAspect !== '1:1'){
+          setPanelExpanded(false);
+        }
       }else if (intent === 'swap'){
         toggleSwap();
       }
