@@ -2,16 +2,18 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Camera App</title>
   <style>
     :root{
-      --bar-h: 132px;
+      --panel-h-collapsed: 132px;
+      --panel-h-expanded: 318px;
       --btn: 86px;
       --small-btn: 46px;
       --side: 18px;
       --swap-dur: 360ms;
       --zoom-dur: 180ms;
+      --safe-b: env(safe-area-inset-bottom);
     }
 
     *{
@@ -29,15 +31,22 @@
       user-select: none;
       -webkit-user-select: none;
       touch-action: none;
+      overscroll-behavior: none;
+    }
+
+    body{
+      position: fixed;
+      inset: 0;
     }
 
     #app{
       position: relative;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100dvh;
       background: #000;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
     #viewport{
@@ -47,31 +56,33 @@
       overflow: hidden;
     }
 
-    #camera{
+    #previewCanvas{
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      display: block;
       background: #000;
-      transform-origin: center center;
-      transition: transform var(--zoom-dur) ease;
+    }
+
+    #cameraSource{
+      display: none;
     }
 
     #gestureLayer{
       position: absolute;
       inset: 0;
-      z-index: 5;
+      z-index: 8;
       touch-action: none;
     }
 
     #topHud{
       position: absolute;
-      top: 12px;
+      top: calc(12px + env(safe-area-inset-top));
       left: 12px;
       right: 12px;
-      z-index: 10;
+      z-index: 20;
       display: flex;
       align-items: flex-start;
-      justify-content: flex-end;
+      justify-content: space-between;
       gap: 8px;
       pointer-events: none;
     }
@@ -95,9 +106,9 @@
 
     #zoomPill{
       position: absolute;
-      top: 12px;
+      top: calc(12px + env(safe-area-inset-top));
       left: 12px;
-      z-index: 11;
+      z-index: 21;
       pointer-events: auto;
       opacity: 1;
       transform: translateY(0);
@@ -110,21 +121,89 @@
 
     #controls{
       position: relative;
-      height: var(--bar-h);
+      height: var(--panel-h-collapsed);
       background: #000;
       overflow: hidden;
       border-top: 1px solid rgba(255,255,255,.06);
+      padding-bottom: var(--safe-b);
+      transition: height 240ms ease;
+    }
+
+    #controls.expanded{
+      height: var(--panel-h-expanded);
+    }
+
+    #panelHint{
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,.38);
+      font-size: 12px;
+      letter-spacing: .08em;
+      z-index: 2;
+      pointer-events: none;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    #settingsPanel{
+      position: absolute;
+      top: 28px;
+      left: 0;
+      right: 0;
+      z-index: 2;
+      padding: 10px 14px 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      opacity: 0;
+      transform: translateY(14px);
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    #controls.expanded #settingsPanel{
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .settingBtn{
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.08);
+      color: #fff;
+      border-radius: 14px;
+      min-width: 92px;
+      padding: 12px 14px;
+      font-size: 14px;
+      line-height: 1;
+      box-shadow: 0 8px 18px rgba(0,0,0,.22);
+      touch-action: manipulation;
+    }
+
+    .settingBtn:active{
+      transform: scale(.96);
+    }
+
+    .settingBtn.active{
+      background: rgba(255,255,255,.22);
+    }
+
+    .settingBtn.wide{
+      min-width: 140px;
     }
 
     .controlBtn{
       position: absolute;
-      bottom: 22px;
+      bottom: calc(22px + var(--safe-b));
       width: var(--btn);
       height: var(--btn);
       border-radius: 50%;
       border: none;
       outline: none;
-      z-index: 3;
+      z-index: 4;
       transition:
         left var(--swap-dur) cubic-bezier(.2,.9,.2,1),
         transform 120ms ease,
@@ -153,13 +232,13 @@
     #switchBtn{
       position: absolute;
       left: 50%;
-      bottom: 31px;
+      bottom: calc(31px + var(--safe-b));
       transform: translateX(-50%);
       width: var(--small-btn);
       height: var(--small-btn);
       border-radius: 50%;
       border: none;
-      z-index: 4;
+      z-index: 5;
       background: rgba(255,255,255,.10);
       color: #fff;
       font-size: 18px;
@@ -221,7 +300,7 @@
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      z-index: 20;
+      z-index: 30;
       max-width: 88%;
       padding: 14px 16px;
       border-radius: 16px;
@@ -240,18 +319,25 @@
       opacity: 1;
     }
 
-    #hiddenCanvas{
+    #hiddenCaptureCanvas{
       display: none;
+    }
+
+    .spacer{
+      flex: 1;
+      min-width: 0;
     }
   </style>
 </head>
 <body>
   <div id="app">
     <div id="viewport">
-      <video id="camera" autoplay playsinline muted></video>
+      <canvas id="previewCanvas"></canvas>
+      <video id="cameraSource" autoplay playsinline muted></video>
       <div id="gestureLayer"></div>
 
       <div id="topHud">
+        <div></div>
         <div class="pill pillButton" id="memorySaveBtn">メモリ保存 0</div>
       </div>
 
@@ -260,6 +346,16 @@
     </div>
 
     <div id="controls">
+      <div id="panelHint">上にスワイプで広げる / 下にスワイプで戻す</div>
+
+      <div id="settingsPanel">
+        <button class="settingBtn" id="aspect34Btn">3:4</button>
+        <button class="settingBtn" id="aspect916Btn">9:16</button>
+        <button class="settingBtn" id="aspect11Btn">1:1</button>
+        <button class="settingBtn wide" id="rotateFollowBtn">縦横切替 ON</button>
+        <button class="settingBtn wide" id="micToggleBtn">マイク ON</button>
+      </div>
+
       <button id="videoBtn" class="controlBtn" aria-label="動画の開始と停止">
         <span class="innerDot"></span>
       </button>
@@ -271,11 +367,18 @@
       </button>
     </div>
 
-    <canvas id="hiddenCanvas"></canvas>
+    <canvas id="hiddenCaptureCanvas"></canvas>
   </div>
 
   <script>
-    const video = document.getElementById('camera');
+    const cameraSource = document.getElementById('cameraSource');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const previewCtx = previewCanvas.getContext('2d', { alpha: false });
+
+    const hiddenCaptureCanvas = document.getElementById('hiddenCaptureCanvas');
+    const hiddenCaptureCtx = hiddenCaptureCanvas.getContext('2d', { alpha: false });
+
+    const viewport = document.getElementById('viewport');
     const gestureLayer = document.getElementById('gestureLayer');
     const controls = document.getElementById('controls');
     const videoBtn = document.getElementById('videoBtn');
@@ -283,15 +386,33 @@
     const switchBtn = document.getElementById('switchBtn');
     const zoomPill = document.getElementById('zoomPill');
     const messageBox = document.getElementById('message');
-    const hiddenCanvas = document.getElementById('hiddenCanvas');
     const memorySaveBtn = document.getElementById('memorySaveBtn');
 
-    let stream = null;
+    const aspect34Btn = document.getElementById('aspect34Btn');
+    const aspect916Btn = document.getElementById('aspect916Btn');
+    const aspect11Btn = document.getElementById('aspect11Btn');
+    const rotateFollowBtn = document.getElementById('rotateFollowBtn');
+    const micToggleBtn = document.getElementById('micToggleBtn');
+
+    const ASPECTS = {
+      '3:4': 3 / 4,
+      '9:16': 9 / 16,
+      '1:1': 1
+    };
+
+    let selectedAspect = '9:16';
+    let followDeviceRotation = true;
+    let micEnabled = true;
+    let panelExpanded = false;
+
+    let videoStream = null;
+    let micStream = null;
+    let micTrack = null;
+
     let mediaRecorder = null;
     let recordedChunks = [];
     let isRecording = false;
 
-    let swapped = false;
     let currentFacing = 'environment';
 
     const zoomLevels = [0.5, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -299,16 +420,18 @@
 
     let activeTrack = null;
     let supportsTrackZoom = false;
+    let hardwareZoomAvailable = false;
     let hardwareZoomMin = 1;
     let hardwareZoomMax = 1;
-    let hardwareZoomAvailable = false;
 
-    let swipeStartX = 0;
-    let swipeStartY = 0;
     let controlsSwipeActive = false;
     let controlsSwipeLocked = false;
+    let gestureActive = false;
+    let gestureLocked = false;
+    let swipeStartX = 0;
+    let swipeStartY = 0;
 
-    const memoryItems = []; // { kind, blob, filename, type }
+    const memoryItems = [];
 
     function showMessage(text, ms = 2200){
       messageBox.textContent = text;
@@ -327,6 +450,90 @@
       return Number.isInteger(z) ? String(z) : z.toFixed(1).replace(/\.0$/, '');
     }
 
+    function getDeviceAngle(){
+      let angle = 0;
+      if (screen.orientation && typeof screen.orientation.angle === 'number'){
+        angle = screen.orientation.angle;
+      }else if (typeof window.orientation === 'number'){
+        angle = window.orientation;
+      }
+      angle = ((angle % 360) + 360) % 360;
+      return angle;
+    }
+
+    function isLandscapeDevice(){
+      const a = getDeviceAngle();
+      return a === 90 || a === 270;
+    }
+
+    function getRotationDeg(){
+      if (!followDeviceRotation) return 0;
+      return getDeviceAngle();
+    }
+
+    function getAspectRatioValue(){
+      return ASPECTS[selectedAspect] || ASPECTS['9:16'];
+    }
+
+    function getOutputSize(mode = 'preview'){
+      const base = mode === 'photo' ? 1080 : 540;
+      const ratio = getAspectRatioValue();
+      const landscape = followDeviceRotation && isLandscapeDevice();
+
+      if (!landscape){
+        return {
+          width: base,
+          height: Math.round(base / ratio)
+        };
+      }
+
+      return {
+        width: Math.round(base / ratio),
+        height: base
+      };
+    }
+
+    function resizeCanvasToMode(canvas, mode){
+      const { width, height } = getOutputSize(mode);
+      if (canvas.width !== width || canvas.height !== height){
+        canvas.width = width;
+        canvas.height = height;
+      }
+    }
+
+    function drawVideoFrameToCanvas(ctx, canvas, mode){
+      const cw = canvas.width;
+      const ch = canvas.height;
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, cw, ch);
+
+      if (!cameraSource.videoWidth || !cameraSource.videoHeight){
+        return;
+      }
+
+      const rotationDeg = getRotationDeg();
+      const rot = rotationDeg * Math.PI / 180;
+      const isQuarterTurn = rotationDeg === 90 || rotationDeg === 270;
+      const sourceW = isQuarterTurn ? cameraSource.videoHeight : cameraSource.videoWidth;
+      const sourceH = isQuarterTurn ? cameraSource.videoWidth : cameraSource.videoHeight;
+      const scale = Math.max(cw / sourceW, ch / sourceH);
+      const drawW = sourceW * scale;
+      const drawH = sourceH * scale;
+
+      ctx.save();
+      ctx.translate(cw / 2, ch / 2);
+      ctx.rotate(rot);
+      ctx.drawImage(cameraSource, -drawW / 2, -drawH / 2, drawW, drawH);
+      ctx.restore();
+    }
+
+    function renderLoop(){
+      resizeCanvasToMode(previewCanvas, 'preview');
+      drawVideoFrameToCanvas(previewCtx, previewCanvas, 'preview');
+      requestAnimationFrame(renderLoop);
+    }
+
     function updateZoomLabel(){
       zoomPill.textContent = `x${formatZoom(currentZoom)}`;
       flashZoom();
@@ -336,9 +543,10 @@
       updateZoomLabel();
 
       if (!hardwareZoomAvailable || currentZoom < hardwareZoomMin || currentZoom > hardwareZoomMax){
-        video.style.transform = `scale(${currentZoom})`;
+        // ハードウェアズームが効かない場合は見た目だけズーム
+        previewCanvas.style.transform = `scale(${currentZoom})`;
       }else{
-        video.style.transform = 'none';
+        previewCanvas.style.transform = 'none';
       }
     }
 
@@ -385,22 +593,37 @@
 
       const ok = await applyHardwareZoom(currentZoom);
       if (!ok){
-        video.style.transform = `scale(${currentZoom})`;
+        previewCanvas.style.transform = `scale(${currentZoom})`;
       }else{
-        video.style.transform = 'none';
+        previewCanvas.style.transform = 'none';
       }
     }
 
     function toggleSwap(){
-      swapped = !swapped;
+      const videoX = getComputedStyle(document.documentElement).getPropertyValue('--side');
+      const btnSize = getComputedStyle(document.documentElement).getPropertyValue('--btn');
+      const leftPos = `var(--side)`;
+      const rightPos = `calc(100% - var(--side) - var(--btn))`;
 
-      if (swapped){
-        videoBtn.style.left = `calc(100% - var(--side) - var(--btn))`;
-        photoBtn.style.left = `var(--side)`;
+      toggleSwap.state = !toggleSwap.state;
+
+      if (toggleSwap.state){
+        videoBtn.style.left = rightPos;
+        photoBtn.style.left = leftPos;
       }else{
-        videoBtn.style.left = `var(--side)`;
-        photoBtn.style.left = `calc(100% - var(--side) - var(--btn))`;
+        videoBtn.style.left = leftPos;
+        photoBtn.style.left = rightPos;
       }
+    }
+    toggleSwap.state = false;
+
+    function setPanelExpanded(expanded){
+      panelExpanded = expanded;
+      controls.classList.toggle('expanded', expanded);
+    }
+
+    function togglePanel(){
+      setPanelExpanded(!panelExpanded);
     }
 
     function updateMemoryButton(){
@@ -488,28 +711,97 @@
       showMessage('保存を開始したよ', 1600);
     }
 
-    function drawZoomedFrameToCanvas(canvas, sourceVideo, zoom){
-      const ctx = canvas.getContext('2d', { willReadFrequently: false });
-      const vw = sourceVideo.videoWidth;
-      const vh = sourceVideo.videoHeight;
+    async function ensureMicStream(){
+      if (micStream) return micStream;
 
-      if (!vw || !vh) return false;
+      try{
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
+        });
+        micTrack = micStream.getAudioTracks()[0] || null;
+        if (micTrack){
+          micTrack.enabled = micEnabled;
+        }
+        return micStream;
+      }catch(err){
+        console.error(err);
+        micStream = null;
+        micTrack = null;
+        micEnabled = false;
+        updateSettingButtons();
+        showMessage('マイク許可が取れなかったよ');
+        return null;
+      }
+    }
 
-      canvas.width = vw;
-      canvas.height = vh;
-
-      if (zoom <= 1){
-        ctx.drawImage(sourceVideo, 0, 0, vw, vh);
-        return true;
+    async function startVideoStream(facingMode = 'environment'){
+      if (videoStream){
+        videoStream.getTracks().forEach(t => t.stop());
+        videoStream = null;
       }
 
-      const cropW = vw / zoom;
-      const cropH = vh / zoom;
-      const sx = Math.max(0, (vw - cropW) / 2);
-      const sy = Math.max(0, (vh - cropH) / 2);
+      try{
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        });
 
-      ctx.drawImage(sourceVideo, sx, sy, cropW, cropH, 0, 0, vw, vh);
-      return true;
+        cameraSource.srcObject = videoStream;
+        await cameraSource.play();
+
+        const tracks = videoStream.getVideoTracks();
+        activeTrack = tracks && tracks[0] ? tracks[0] : null;
+
+        supportsTrackZoom = false;
+        hardwareZoomAvailable = false;
+        hardwareZoomMin = 1;
+        hardwareZoomMax = 1;
+
+        if (activeTrack && activeTrack.getCapabilities){
+          const cap = activeTrack.getCapabilities();
+          supportsTrackZoom = typeof cap.zoom !== 'undefined';
+
+          if (supportsTrackZoom && cap.zoom){
+            hardwareZoomAvailable = true;
+            hardwareZoomMin = typeof cap.zoom.min === 'number' ? cap.zoom.min : 1;
+            hardwareZoomMax = typeof cap.zoom.max === 'number' ? cap.zoom.max : 1;
+          }
+        }
+
+        const ok = await applyHardwareZoom(currentZoom);
+        if (!ok){
+          previewCanvas.style.transform = `scale(${currentZoom})`;
+        }else{
+          previewCanvas.style.transform = 'none';
+        }
+      }catch(err){
+        console.error(err);
+        showMessage('カメラを使えなかった。権限を確認してね');
+      }
+    }
+
+    async function startCamera(facingMode = 'environment'){
+      await startVideoStream(facingMode);
+      await ensureMicStream();
+      tryLockPortraitBestEffort();
+    }
+
+    async function switchCamera(){
+      if (isRecording){
+        stopRecording();
+      }
+      currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+      await startVideoStream(currentFacing);
+      showMessage(currentFacing === 'user' ? 'インカメラにしたよ' : '外カメラにしたよ', 900);
     }
 
     function formatDate(){
@@ -525,31 +817,42 @@
       );
     }
 
-    async function capturePhoto(){
-      if (!video.videoWidth || !video.videoHeight){
+    function capturePhoto(){
+      if (!cameraSource.videoWidth || !cameraSource.videoHeight){
         showMessage('まだカメラの準備中だよ');
         return;
       }
 
-      const ok = drawZoomedFrameToCanvas(hiddenCanvas, video, currentZoom);
-      if (!ok){
-        showMessage('写真を撮れなかった');
-        return;
-      }
+      resizeCanvasToMode(hiddenCaptureCanvas, 'photo');
+      drawVideoFrameToCanvas(hiddenCaptureCtx, hiddenCaptureCanvas, 'photo');
 
-      hiddenCanvas.toBlob((blob) => {
+      hiddenCaptureCanvas.toBlob((blob) => {
         if (!blob){
           showMessage('写真の保存に失敗した');
           return;
         }
-        const filename = `photo_${formatDate()}.jpg`;
+        const filename = `photo_${formatDate()}.png`;
         addToMemory('photo', blob, filename);
         showMessage('写真をメモリに入れたよ', 1200);
-      }, 'image/jpeg', 0.95);
+      }, 'image/png');
+    }
+
+    function buildRecordingStream(){
+      const canvasStream = previewCanvas.captureStream(30);
+      const merged = new MediaStream();
+
+      canvasStream.getVideoTracks().forEach(track => merged.addTrack(track));
+
+      if (micTrack){
+        micTrack.enabled = micEnabled;
+        merged.addTrack(micTrack);
+      }
+
+      return merged;
     }
 
     function startRecording(){
-      if (!stream){
+      if (!videoStream){
         showMessage('カメラの準備がまだだよ');
         return;
       }
@@ -560,10 +863,13 @@
       if (isRecording) return;
 
       const format = pickRecorderFormat();
+      let recorderStream = null;
+
       try{
+        recorderStream = buildRecordingStream();
         mediaRecorder = format.mimeType
-          ? new MediaRecorder(stream, { mimeType: format.mimeType })
-          : new MediaRecorder(stream);
+          ? new MediaRecorder(recorderStream, { mimeType: format.mimeType })
+          : new MediaRecorder(recorderStream);
       }catch(err){
         console.error(err);
         showMessage('動画録画を開始できなかった');
@@ -571,6 +877,7 @@
       }
 
       recordedChunks = [];
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0){
           recordedChunks.push(e.data);
@@ -589,6 +896,10 @@
         }else{
           showMessage('録画データが空だった');
         }
+
+        try{
+          recorderStream.getTracks().forEach(t => t.stop());
+        }catch(e){}
       };
 
       try{
@@ -604,11 +915,13 @@
 
     function stopRecording(){
       if (!mediaRecorder || !isRecording) return;
+
       try{
         mediaRecorder.stop();
       }catch(err){
         console.error(err);
       }
+
       isRecording = false;
       videoBtn.classList.remove('recording');
       showMessage('録画ストップ', 1000);
@@ -619,109 +932,132 @@
       else startRecording();
     }
 
-    async function stopStream(){
-      if (stream){
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
-        activeTrack = null;
-        supportsTrackZoom = false;
-        hardwareZoomAvailable = false;
-        hardwareZoomMin = 1;
-        hardwareZoomMax = 1;
+    function setAspect(aspect){
+      selectedAspect = aspect;
+      updateSettingButtons();
+      resizeCanvasToMode(previewCanvas, 'preview');
+      resizeCanvasToMode(hiddenCaptureCanvas, 'photo');
+      showMessage(`比率を ${aspect} にしたよ`, 900);
+    }
+
+    function toggleFollowRotation(){
+      followDeviceRotation = !followDeviceRotation;
+      updateSettingButtons();
+      resizeCanvasToMode(previewCanvas, 'preview');
+      resizeCanvasToMode(hiddenCaptureCanvas, 'photo');
+      showMessage(followDeviceRotation ? '縦横切替 ON' : '縦横切替 OFF', 900);
+    }
+
+    async function toggleMic(){
+      if (micEnabled){
+        micEnabled = false;
+        if (micTrack) micTrack.enabled = false;
+        updateSettingButtons();
+        showMessage('マイク OFF', 900);
+        return;
+      }
+
+      micEnabled = true;
+      if (!micTrack){
+        await ensureMicStream();
+      }
+
+      if (micTrack){
+        micTrack.enabled = true;
+        updateSettingButtons();
+        showMessage('マイク ON', 900);
+      }else{
+        micEnabled = false;
+        updateSettingButtons();
       }
     }
 
-    async function startCamera(facingMode = 'environment'){
-      await stopStream();
+    function updateSettingButtons(){
+      aspect34Btn.classList.toggle('active', selectedAspect === '3:4');
+      aspect916Btn.classList.toggle('active', selectedAspect === '9:16');
+      aspect11Btn.classList.toggle('active', selectedAspect === '1:1');
 
+      rotateFollowBtn.textContent = followDeviceRotation ? '縦横切替 ON' : '縦横切替 OFF';
+      rotateFollowBtn.classList.toggle('active', followDeviceRotation);
+
+      micToggleBtn.textContent = micEnabled ? 'マイク ON' : 'マイク OFF';
+      micToggleBtn.classList.toggle('active', micEnabled);
+    }
+
+    async function tryLockPortraitBestEffort(){
       try{
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: facingMode },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        });
-
-        video.srcObject = stream;
-        await video.play();
-
-        const tracks = stream.getVideoTracks();
-        activeTrack = tracks && tracks[0] ? tracks[0] : null;
-
-        supportsTrackZoom = false;
-        hardwareZoomAvailable = false;
-
-        if (activeTrack && activeTrack.getCapabilities){
-          const cap = activeTrack.getCapabilities();
-          supportsTrackZoom = typeof cap.zoom !== 'undefined';
-
-          if (supportsTrackZoom && cap.zoom){
-            hardwareZoomAvailable = true;
-            hardwareZoomMin = typeof cap.zoom.min === 'number' ? cap.zoom.min : 1;
-            hardwareZoomMax = typeof cap.zoom.max === 'number' ? cap.zoom.max : 1;
-          }
+        if (screen.orientation && screen.orientation.lock){
+          await screen.orientation.lock('portrait');
         }
-
-        updateZoomVisual();
-
-        const ok = await applyHardwareZoom(currentZoom);
-        if (!ok){
-          video.style.transform = `scale(${currentZoom})`;
-        }else{
-          video.style.transform = 'none';
-        }
-
-        showMessage(facingMode === 'user' ? 'インカメラにしたよ' : '外カメラにしたよ', 1000);
       }catch(err){
-        console.error(err);
-        showMessage('カメラを使えなかった。権限を確認してね');
+        // ブラウザ側の制限があるので、失敗してもそのまま続行
       }
     }
 
-    async function switchCamera(){
-      if (isRecording){
-        stopRecording();
+    function getControlsGestureIntent(dx, dy){
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
+
+      if (ady > 42 && ady > adx){
+        return dy < 0 ? 'panel-open' : 'panel-close';
       }
-      currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
-      await startCamera(currentFacing);
+
+      if (adx > 42 && adx > ady){
+        return 'swap';
+      }
+
+      return null;
     }
 
-    function getSwipeDirection(dx, dy){
-      return Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+    function getZoomGestureIntent(dx, dy){
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
+
+      if (ady > adx){
+        return dy < 0 ? 'zoom-in' : 'zoom-out';
+      }
+
+      return null;
     }
 
     gestureLayer.addEventListener('pointerdown', (e) => {
-      controlsSwipeActive = false;
-      controlsSwipeLocked = false;
+      gestureActive = true;
+      gestureLocked = false;
       swipeStartX = e.clientX;
       swipeStartY = e.clientY;
+      gestureLayer.setPointerCapture(e.pointerId);
     });
 
     gestureLayer.addEventListener('pointermove', async (e) => {
-      if (controlsSwipeLocked) return;
+      if (!gestureActive || gestureLocked) return;
 
       const dx = e.clientX - swipeStartX;
       const dy = e.clientY - swipeStartY;
 
       if (Math.abs(dx) < 16 && Math.abs(dy) < 16) return;
 
-      if (getSwipeDirection(dx, dy) === 'vertical'){
-        const distance = dy;
-        const steps = Math.floor(Math.abs(distance) / 70);
+      const intent = getZoomGestureIntent(dx, dy);
+      if (!intent) return;
 
-        if (steps >= 1){
-          controlsSwipeLocked = true;
-          const dir = distance < 0 ? 'up' : 'down';
-          const nextZoom = getNextZoom(dir);
-          await setZoom(nextZoom);
-        }
+      gestureLocked = true;
+
+      if (intent === 'zoom-in'){
+        const nextZoom = getNextZoom('up');
+        await setZoom(nextZoom);
+      }else if (intent === 'zoom-out'){
+        const nextZoom = getNextZoom('down');
+        await setZoom(nextZoom);
       }
+    });
+
+    gestureLayer.addEventListener('pointerup', () => {
+      gestureActive = false;
+      gestureLocked = false;
+    });
+
+    gestureLayer.addEventListener('pointercancel', () => {
+      gestureActive = false;
+      gestureLocked = false;
     });
 
     controls.addEventListener('pointerdown', (e) => {
@@ -739,10 +1075,18 @@
       const dx = e.clientX - swipeStartX;
       const dy = e.clientY - swipeStartY;
 
-      if (Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
+      if (Math.abs(dx) < 16 && Math.abs(dy) < 16) return;
 
-      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)){
-        controlsSwipeLocked = true;
+      const intent = getControlsGestureIntent(dx, dy);
+      if (!intent) return;
+
+      controlsSwipeLocked = true;
+
+      if (intent === 'panel-open'){
+        setPanelExpanded(true);
+      }else if (intent === 'panel-close'){
+        setPanelExpanded(false);
+      }else if (intent === 'swap'){
         toggleSwap();
       }
     });
@@ -767,17 +1111,40 @@
       showMessage('ズームを1倍に戻したよ', 900);
     });
 
+    aspect34Btn.addEventListener('click', () => setAspect('3:4'));
+    aspect916Btn.addEventListener('click', () => setAspect('9:16'));
+    aspect11Btn.addEventListener('click', () => setAspect('1:1'));
+    rotateFollowBtn.addEventListener('click', toggleFollowRotation);
+    micToggleBtn.addEventListener('click', toggleMic);
+
+    window.addEventListener('resize', () => {
+      resizeCanvasToMode(previewCanvas, 'preview');
+      resizeCanvasToMode(hiddenCaptureCanvas, 'photo');
+    });
+
+    window.addEventListener('orientationchange', () => {
+      resizeCanvasToMode(previewCanvas, 'preview');
+      resizeCanvasToMode(hiddenCaptureCanvas, 'photo');
+    });
+
     window.addEventListener('beforeunload', () => {
       if (mediaRecorder && mediaRecorder.state === 'recording'){
         try{ mediaRecorder.stop(); }catch(e){}
       }
-      if (stream){
-        stream.getTracks().forEach(t => t.stop());
+      if (videoStream){
+        videoStream.getTracks().forEach(t => t.stop());
+      }
+      if (micStream){
+        micStream.getTracks().forEach(t => t.stop());
       }
     });
 
+    updateSettingButtons();
     updateMemoryButton();
     updateZoomLabel();
+    resizeCanvasToMode(previewCanvas, 'preview');
+    resizeCanvasToMode(hiddenCaptureCanvas, 'photo');
+    renderLoop();
     startCamera(currentFacing);
   </script>
 </body>
